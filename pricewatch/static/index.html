@@ -10,17 +10,16 @@
     color-scheme: light;
     --bg: #f7f6f2; --card: #fcfcfb; --text: #1f2421; --muted: #6b706c;
     --line: #e4e2dc; --accent: #2f7d4f; --down: #2f7d4f; --up: #c2452d; --chip: #eef3ef; --best: #e3f1e8;
-    /* One fixed color per store (categorical slots in store order); color follows the store everywhere. */
-    --s-shoprite: #2a78d6; --s-hmart: #eb6834; --s-ranch99: #1baf7a; --s-target: #eda100;
-    --s-costco: #e87ba4; --s-walmart: #008300; --s-traderjoes: #6250d6; --s-asianfood: #e34948;
+    /* Stores are identified by their app icon everywhere except the chart, where lines
+       need distinct hues — this palette is for the chart only, not brand colors. */
+    --s-shoprite: #0066ff; --s-hmart: #ff8000; --s-costco: #00a651;
+    --s-ranch99: #ff0000; --s-target: #8000ff; --s-walmart: #ffd700;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) {
       color-scheme: dark;
       --bg: #141614; --card: #1a1a19; --text: #f0efec; --muted: #a8aba6;
       --line: #2e3230; --accent: #5cbf85; --down: #5cbf85; --up: #ef7a62; --chip: #252b27; --best: #1f3327;
-      --s-shoprite: #3987e5; --s-hmart: #d95926; --s-ranch99: #199e70; --s-target: #c98500;
-      --s-costco: #d55181; --s-walmart: #008300; --s-traderjoes: #9085e9; --s-asianfood: #e66767;
     }
   }
   * { box-sizing: border-box; }
@@ -47,7 +46,7 @@
   td.cell.best { background: var(--best); }
   tr.row:hover td.cell.best, tr.row.sel td.cell.best { background: var(--best); }
   .tag { font-size: 11px; color: #fff; background: var(--down); border-radius: 6px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
-  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .store-icon { width: 16px; height: 16px; border-radius: 4px; margin-right: 6px; vertical-align: -3px; object-fit: cover; }
   .down { color: var(--down); } .up { color: var(--up); }
   .bars { display: grid; grid-template-columns: max-content 1fr max-content; gap: 6px 10px; align-items: center; margin: 12px 0 4px; }
   .bars .track { height: 14px; }
@@ -69,11 +68,25 @@
 <body>
 <main>
   <h1>Grocery Price Compare</h1>
-  <p class="sub">Unit prices of the same product across your stores. The cheapest store is highlighted; click a product to see its history and log a new price.</p>
+  <p class="sub">Unit prices of the same product across your stores. The cheapest store is highlighted; click a product to see its price history.</p>
+  <p style="background:#ffe08a;color:#1f2421;padding:6px 10px;border-radius:6px;font-weight:600;display:inline-block;margin:0 0 16px">
+    页面版本 / Build: {{BUILD}}</p>
 
   <div class="card">
+    <form id="search-form" style="display:flex;gap:8px">
+      <input id="search" type="search" placeholder="Search products… e.g. egg" style="flex:1">
+      <button type="submit">Search</button>
+    </form>
+  </div>
+
+  <div class="card" id="results-card" style="display:none">
+    <div id="results"></div>
+    <div id="no-match" class="empty" style="display:none">No products match your search.</div>
+  </div>
+
+  <div class="card" id="matrix-card">
     <div class="tablewrap"><table id="matrix"></table></div>
-    <div id="empty" class="empty" style="display:none">No products yet. Add one below, then log its price at each store.</div>
+    <div id="empty" class="empty" style="display:none">No products yet.</div>
   </div>
 
   <div class="card" id="detail" style="display:none">
@@ -83,42 +96,20 @@
     <div class="bars" id="bars"></div>
     <div class="section-label">Unit price history</div>
     <div class="chartbox"><canvas id="chart" aria-label="Unit price history by store"></canvas></div>
-    <details><summary>Show all recorded prices</summary>
-      <div class="tablewrap"><table id="hist-table"></table></div>
-    </details>
-    <div class="section-label">Log a price</div>
-    <form id="record-form">
-      <select name="store" id="record-store" required></select>
-      <input name="price" type="number" step="0.01" min="0.01" placeholder="Pack price $" required>
-      <input name="qty" id="record-qty" type="number" step="any" min="0" placeholder="Units in pack (1)">
-      <input name="note" placeholder="Note (sale, member…)">
-      <input name="url" type="url" placeholder="Product page URL (optional)">
-      <button type="submit">Log price</button>
-    </form>
     <p style="margin:12px 0 0"><button type="button" class="ghost" id="delete-btn">Delete product</button></p>
-  </div>
-
-  <div class="card">
-    <h2 style="margin-bottom:12px">Add a product</h2>
-    <form id="add-form">
-      <input name="name" placeholder="English name, e.g. Eggs" required>
-      <input name="name_zh" placeholder="Chinese name, e.g. 鸡蛋">
-      <input name="unit" placeholder="Compare per… lb / egg / oz" required>
-      <input name="target_price" type="number" step="any" min="0" placeholder="Target unit price $ (optional)">
-      <button type="submit">Add product</button>
-    </form>
   </div>
 </main>
 <div id="toast"></div>
 
 <script>
-let state = { stores: {}, products: [], selected: null };
+let state = { stores: {}, products: [], selected: null, query: "" };
 let chart;
 const $ = (s) => document.querySelector(s);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const storeColor = (k) => css("--s-" + k) || css("--muted");
+const storeColor = (k) => css("--s-" + k) || css("--muted"); // chart line color only — see note above
+const storeBadge = (k) => `<img class="store-icon" src="icons/${k}.png" alt="${esc(state.stores[k] || k)}">`;
 const money = (v) => v == null ? "–" : "$" + Number(v).toFixed(2);
-const unitMoney = (v) => v == null ? "–" : "$" + Number(v).toFixed(v < 1 ? 3 : 2);
+const unitMoney = (v) => v == null ? "–" : "$" + Number(v).toFixed(2);
 const qtyText = (q) => q === 1 ? "" : ` / ${+q.toFixed(3)}`;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const nameHtml = (p) => `${esc(p.name)}${p.name_zh ? `<span class="zh">${esc(p.name_zh)}</span>` : ""}`;
@@ -138,20 +129,52 @@ async function api(path, body) {
 async function load() {
   const data = await api("/api/products");
   state.stores = data.stores; state.products = data.products;
-  renderMatrix();
-  $("#record-store").innerHTML = '<option value="">Store…</option>' +
-    Object.entries(state.stores).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  render();
   if (state.selected) showDetail(state.selected);
 }
 
+function matchedProducts() {
+  const q = state.query.trim().toLowerCase();
+  if (!q) return null;
+  return state.products.filter((p) => p.name.toLowerCase().includes(q) || (p.name_zh || "").toLowerCase().includes(q));
+}
+
+// Search is a standalone lookup: type a keyword, see every matching product ranked
+// cheapest-first across stores. It never requires or opens the add/edit form.
+function render() {
+  const matches = matchedProducts();
+  $("#results-card").style.display = matches ? "block" : "none";
+  $("#matrix-card").style.display = matches ? "none" : "block";
+  if (matches) renderResults(matches); else renderMatrix(state.products);
+}
+
+function renderResults(ps) {
+  $("#no-match").style.display = ps.length ? "none" : "block";
+  $("#results").innerHTML = ps.map((p) => {
+    const priced = p.listings.filter((l) => l.unit_price != null); // already ranked cheapest-first by the server
+    const rows = priced.length
+      ? priced.map((l, i) => `<tr><td>${i + 1}</td>
+          <td>${storeBadge(l.store)}${esc(state.stores[l.store])}</td>
+          <td class="num"><span class="u">${unitMoney(l.unit_price)}</span>/${esc(p.unit)}${i === 0 ? ' <span class="tag">Cheapest</span>' : ""}</td>
+          <td class="num muted">${money(l.price)}${qtyText(l.qty)}</td></tr>`).join("")
+      : `<tr><td colspan="4" class="muted">No prices logged yet</td></tr>`;
+    return `<div style="margin-bottom:20px">
+      <h2 style="margin-bottom:8px" class="row" data-id="${p.id}">${nameHtml(p)}</h2>
+      <div class="muted" style="margin:-6px 0 8px">per ${esc(p.unit)}</div>
+      <div class="tablewrap"><table><thead><tr><th>#</th><th>Store</th><th class="num">Unit price</th><th class="num">Pack</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    </div>`;
+  }).join("");
+  $("#results").querySelectorAll("h2.row").forEach((h) => h.onclick = () => toggleDetail(Number(h.dataset.id)));
+}
+
 // Rows are products, columns are the stores that have at least one price.
-function renderMatrix() {
-  const ps = state.products;
+function renderMatrix(ps) {
   $("#empty").style.display = ps.length ? "none" : "block";
   if (!ps.length) { $("#matrix").innerHTML = ""; return; }
   const used = Object.keys(state.stores).filter((k) => ps.some((p) => p.listings.some((l) => l.store === k && l.unit_price != null)));
   const head = `<tr><th>Product</th><th>Unit</th>${used.map((k) =>
-    `<th class="num"><span class="dot" style="background:${storeColor(k)}"></span>${esc(state.stores[k])}</th>`).join("")}<th>Cheapest</th></tr>`;
+    `<th class="num">${storeBadge(k)}${esc(state.stores[k])}</th>`).join("")}<th>Cheapest</th></tr>`;
   const rows = ps.map((p) => {
     const by = Object.fromEntries(p.listings.map((l) => [l.store, l]));
     const best = p.listings.find((l) => l.store === p.best_store);
@@ -169,20 +192,24 @@ function renderMatrix() {
     if (best) {
       const others = p.listings.filter((l) => l.unit_price != null && l.store !== best.store);
       const save = others.length ? ` <span class="muted">saves ${Math.round((1 - best.unit_price / others[others.length - 1].unit_price) * 100)}% vs priciest</span>` : "";
-      cheapest = `<span class="dot" style="background:${storeColor(best.store)}"></span>${esc(state.stores[best.store])}${save}`;
+      cheapest = `${storeBadge(best.store)}${esc(state.stores[best.store])}${save}`;
     }
     return `<tr class="row ${state.selected === p.id ? "sel" : ""}" data-id="${p.id}">
       <td>${nameHtml(p)}${hit}</td><td class="muted">per ${esc(p.unit)}</td>${cells}<td>${cheapest}</td></tr>`;
   }).join("");
   $("#matrix").innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
-  $("#matrix").querySelectorAll("tr.row").forEach((r) => r.onclick = () => showDetail(Number(r.dataset.id)));
+  $("#matrix").querySelectorAll("tr.row").forEach((r) => r.onclick = () => toggleDetail(Number(r.dataset.id)));
+}
+
+function toggleDetail(id) {
+  if (state.selected === id) { state.selected = null; $("#detail").style.display = "none"; render(); return; }
+  showDetail(id);
 }
 
 async function showDetail(id) {
   const p = state.products.find((x) => x.id === id);
   if (!p) { state.selected = null; $("#detail").style.display = "none"; return; }
-  if (state.selected !== id) $("#record-form").reset();
-  state.selected = id; renderMatrix();
+  state.selected = id; render();
   $("#detail").style.display = "block";
   $("#d-title").innerHTML = nameHtml(p);
   $("#d-meta").textContent = `Compared per ${p.unit}` + (p.target_price != null ? ` · target ${unitMoney(p.target_price)}/${p.unit}` : "");
@@ -190,17 +217,13 @@ async function showDetail(id) {
   const priced = p.listings.filter((l) => l.unit_price != null);
   const max = Math.max(...priced.map((l) => l.unit_price), 0);
   $("#bars").innerHTML = priced.length ? priced.map((l) => `
-    <div><span class="dot" style="background:${storeColor(l.store)}"></span>${esc(state.stores[l.store])}</div>
+    <div>${storeBadge(l.store)}${esc(state.stores[l.store])}</div>
     <div class="track"><div class="bar" style="width:${(l.unit_price / max * 100).toFixed(1)}%;background:${storeColor(l.store)}"
       title="${esc(state.stores[l.store])}: ${unitMoney(l.unit_price)}/${esc(p.unit)} (${money(l.price)}${qtyText(l.qty)})"></div></div>
     <div class="val">${unitMoney(l.unit_price)}/${esc(p.unit)}${l.store === p.best_store ? ' <span class="tag">Cheapest</span>' : ""}</div>`).join("")
-    : '<div class="muted" style="grid-column:1/-1">No prices yet — log one below.</div>';
+    : '<div class="muted" style="grid-column:1/-1">No prices yet.</div>';
 
   const hist = await api("/api/history/" + id);
-  $("#hist-table").innerHTML = `<thead><tr><th>Date</th><th>Store</th><th class="num">Pack price</th><th class="num">Units</th><th class="num">Unit price</th><th>Source</th><th>Note</th></tr></thead><tbody>` +
-    hist.slice().reverse().map((h) => `<tr><td>${h.recorded_at.slice(0, 16).replace("T", " ")}</td><td>${esc(state.stores[h.store] || h.store)}</td>
-      <td class="num">${money(h.price)}</td><td class="num">${+h.qty.toFixed(3)}</td><td class="num">${unitMoney(h.unit_price)}</td>
-      <td class="muted">${h.source === "auto" ? "Auto" : "Manual"}</td><td>${esc(h.note)}</td></tr>`).join("") + "</tbody>";
 
   const muted = css("--muted"), line = css("--line");
   const when = (h) => h.recorded_at.slice(5, 16).replace("T", " ");
@@ -234,34 +257,13 @@ async function showDetail(id) {
   });
 }
 
-// Pre-fill the pack size with what was used last time at the chosen store.
-$("#record-store").onchange = (e) => {
-  const p = state.products.find((x) => x.id === state.selected);
-  const l = p && p.listings.find((x) => x.store === e.target.value);
-  $("#record-qty").value = l && l.qty !== 1 ? l.qty : "";
-};
-
-$("#record-form").onsubmit = async (e) => {
-  e.preventDefault();
-  const f = Object.fromEntries(new FormData(e.target));
-  try {
-    const r = await api("/api/prices", { ...f, product_id: state.selected });
-    e.target.reset(); toast(r.alerts.length ? "🔔 " + r.alerts.join(" · ") : "Price logged"); load();
-  } catch (err) { toast(err.message); }
-};
+$("#search").oninput = (e) => { state.query = e.target.value; render(); };
+$("#search-form").onsubmit = (e) => { e.preventDefault(); state.query = $("#search").value; render(); };
 
 $("#delete-btn").onclick = async () => {
   if (!confirm("Delete this product and all of its prices?")) return;
   await api(`/api/products/${state.selected}/delete`, {});
   state.selected = null; $("#detail").style.display = "none"; load();
-};
-
-$("#add-form").onsubmit = async (e) => {
-  e.preventDefault();
-  try {
-    const r = await api("/api/products", Object.fromEntries(new FormData(e.target)));
-    e.target.reset(); state.selected = r.id; toast("Product added — now log its price at each store"); load();
-  } catch (err) { toast(err.message); }
 };
 
 load();

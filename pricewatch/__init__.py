@@ -3,10 +3,8 @@
 STORES = {
     "shoprite": "ShopRite",
     "hmart": "H Mart",
+    "costco": "Costco",
     "ranch99": "99 Ranch",
     "target": "Target",
-    "costco": "Costco",
     "walmart": "Walmart",
-    "traderjoes": "Trader Joe's",
-    "asianfood": "Asian Food Markets",
 }

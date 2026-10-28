@@ -1,6 +1,6 @@
 # Grocery Price Compare 买菜比价
 
-对比同一种商品在 ShopRite、H Mart、99 Ranch、Target、Costco、Walmart、Trader Joe's、Asian Food Markets 的价格。按**单价**（每磅、每个、每盎司…）比较，所以不同包装大小也能直接比。某家店降价、变成最便宜、或达到目标单价时，会弹出 macOS 通知。
+对比同一种商品在 ShopRite、H Mart、Costco、99 Ranch、Target、Walmart 的价格。按**单价**（每磅、每个、每盎司…）比较，所以不同包装大小也能直接比。某家店降价、变成最便宜、或达到目标单价时，会弹出 macOS 通知。
 
 只用 Python 自带的库，不用安装依赖。数据存在 `data/prices.db`（SQLite，不会上传到 git）。
 
@@ -28,14 +28,13 @@ python3 -m pricewatch check                                         # 自动抓�
 python3 -m pricewatch remove 1
 ```
 
-超市代号：`shoprite` `hmart` `ranch99` `target` `costco` `walmart` `traderjoes` `asianfood`
+超市代号：`shoprite` `hmart` `costco` `ranch99` `target` `walmart`
 
 ## 自动抓价的限制
 
 `check` 会读取商品页面上公开的结构化价格数据（schema.org JSON-LD / meta 标签）。实际情况：
 
-- Walmart、Trader Joe's、ShopRite 会拦截脚本访问（返回验证页或 403）。
+- Walmart、ShopRite 会拦截脚本访问（返回验证页或 403）。
 - Target 的价格是浏览器里用 JS 渲染出来的，页面源码里没有。
-- Asian Food Markets 没有网上价格。
 
 所以大部分价格目前需要**手动记录**，拿到小票后在看板上批量录入最实际。
