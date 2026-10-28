@@ -1,204 +1,266 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>买菜价格追踪</title>
+<title>Grocery Price Compare</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root {
-    --bg: #f7f6f2; --card: #ffffff; --text: #1f2421; --muted: #6b706c;
-    --line: #e4e2dc; --accent: #2f7d4f; --down: #2f7d4f; --up: #c2452d; --chip: #eef3ef;
+    color-scheme: light;
+    --bg: #f7f6f2; --card: #fcfcfb; --text: #1f2421; --muted: #6b706c;
+    --line: #e4e2dc; --accent: #2f7d4f; --down: #2f7d4f; --up: #c2452d; --chip: #eef3ef; --best: #e3f1e8;
+    /* One fixed color per store (categorical slots in store order); color follows the store everywhere. */
+    --s-shoprite: #2a78d6; --s-hmart: #eb6834; --s-ranch99: #1baf7a; --s-target: #eda100;
+    --s-costco: #e87ba4; --s-walmart: #008300; --s-traderjoes: #6250d6; --s-asianfood: #e34948;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #161917; --card: #1f2321; --text: #e9ece9; --muted: #9aa19c;
-      --line: #2e3430; --accent: #5cbf85; --down: #5cbf85; --up: #ef7a62; --chip: #26302a; }
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --bg: #141614; --card: #1a1a19; --text: #f0efec; --muted: #a8aba6;
+      --line: #2e3230; --accent: #5cbf85; --down: #5cbf85; --up: #ef7a62; --chip: #252b27; --best: #1f3327;
+      --s-shoprite: #3987e5; --s-hmart: #d95926; --s-ranch99: #199e70; --s-target: #c98500;
+      --s-costco: #d55181; --s-walmart: #008300; --s-traderjoes: #9085e9; --s-asianfood: #e66767;
+    }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; }
-  main { max-width: 1080px; margin: 0 auto; padding: 24px 16px 64px; }
+    font: 15px/1.5 -apple-system, "Helvetica Neue", "PingFang SC", sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
   h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 20px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
-  .chip { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 999px;
-    padding: 4px 12px; cursor: pointer; font: inherit; font-size: 13px; }
-  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .muted { color: var(--muted); }
+  .zh { color: var(--muted); margin-left: 6px; }
+  .tablewrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
   th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-  th { font-size: 12px; color: var(--muted); font-weight: 500; }
+  th { font-size: 12px; color: var(--muted); font-weight: 500; white-space: nowrap; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   tr.row { cursor: pointer; }
   tr.row:hover td, tr.row.sel td { background: var(--chip); }
-  .store { font-size: 12px; background: var(--chip); border-radius: 6px; padding: 2px 8px; white-space: nowrap; }
+  #matrix td:nth-child(-n+2) { white-space: nowrap; }
+  td.cell { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.cell .u { font-weight: 600; }
+  td.cell .p { display: block; font-size: 12px; color: var(--muted); }
+  td.cell.best { background: var(--best); }
+  tr.row:hover td.cell.best, tr.row.sel td.cell.best { background: var(--best); }
+  .tag { font-size: 11px; color: #fff; background: var(--down); border-radius: 6px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
   .down { color: var(--down); } .up { color: var(--up); }
-  .hit { font-size: 12px; color: #fff; background: var(--down); border-radius: 6px; padding: 1px 6px; margin-left: 6px; }
-  .muted { color: var(--muted); }
+  .bars { display: grid; grid-template-columns: max-content 1fr max-content; gap: 6px 10px; align-items: center; margin: 12px 0 4px; }
+  .bars .track { height: 14px; }
+  .bars .bar { height: 14px; border-radius: 0 4px 4px 0; min-width: 2px; }
+  .bars .val { font-variant-numeric: tabular-nums; font-size: 13px; }
+  .chartbox { position: relative; height: 260px; margin: 16px 0 8px; }
   form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
   input, select, button { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
     background: var(--bg); color: var(--text); min-width: 0; }
   button { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer; }
   button.ghost { background: transparent; color: var(--muted); border-color: var(--line); }
-  #detail h2 { font-size: 17px; margin: 0 0 2px; }
-  .chartbox { position: relative; height: 260px; margin: 12px 0; }
+  .section-label { font-size: 13px; color: var(--muted); margin: 16px 0 6px; }
   .empty { padding: 32px; text-align: center; color: var(--muted); }
-  .tablewrap { overflow-x: auto; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 12px; }
   #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg);
     padding: 10px 16px; border-radius: 10px; display: none; max-width: calc(100% - 32px); }
-  @media (max-width: 640px) { .hide-sm { display: none; } }
 </style>
 </head>
 <body>
 <main>
-  <h1>买菜价格追踪</h1>
-  <p class="sub">点一行查看价格走势、手动记录新价格。降价和达到目标价的商品会高亮。</p>
+  <h1>Grocery Price Compare</h1>
+  <p class="sub">Unit prices of the same product across your stores. The cheapest store is highlighted; click a product to see its history and log a new price.</p>
 
   <div class="card">
-    <div class="toolbar" id="filters"></div>
-    <div class="tablewrap">
-      <table>
-        <thead><tr>
-          <th>商品</th><th>超市</th><th class="num">现价</th><th class="num">变化</th>
-          <th class="num hide-sm">最低</th><th class="num hide-sm">目标</th><th class="hide-sm">更新</th>
-        </tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-    <div id="empty" class="empty" style="display:none">还没有商品，在下面添加第一个吧。</div>
+    <div class="tablewrap"><table id="matrix"></table></div>
+    <div id="empty" class="empty" style="display:none">No products yet. Add one below, then log its price at each store.</div>
   </div>
 
   <div class="card" id="detail" style="display:none">
     <h2 id="d-title"></h2>
     <div class="muted" id="d-meta"></div>
-    <div class="chartbox"><canvas id="chart"></canvas></div>
+    <div class="section-label">Latest unit price by store</div>
+    <div class="bars" id="bars"></div>
+    <div class="section-label">Unit price history</div>
+    <div class="chartbox"><canvas id="chart" aria-label="Unit price history by store"></canvas></div>
+    <details><summary>Show all recorded prices</summary>
+      <div class="tablewrap"><table id="hist-table"></table></div>
+    </details>
+    <div class="section-label">Log a price</div>
     <form id="record-form">
-      <input name="price" type="number" step="0.01" min="0" placeholder="新价格 $" required>
-      <input name="note" placeholder="备注（打折、会员价…）">
-      <button type="submit">记录价格</button>
-      <button type="button" class="ghost" id="delete-btn">删除这个商品</button>
+      <select name="store" id="record-store" required></select>
+      <input name="price" type="number" step="0.01" min="0.01" placeholder="Pack price $" required>
+      <input name="qty" id="record-qty" type="number" step="any" min="0" placeholder="Units in pack (1)">
+      <input name="note" placeholder="Note (sale, member…)">
+      <input name="url" type="url" placeholder="Product page URL (optional)">
+      <button type="submit">Log price</button>
     </form>
+    <p style="margin:12px 0 0"><button type="button" class="ghost" id="delete-btn">Delete product</button></p>
   </div>
 
   <div class="card">
-    <h2 style="font-size:17px;margin:0 0 12px">添加商品</h2>
+    <h2 style="margin-bottom:12px">Add a product</h2>
     <form id="add-form">
-      <input name="name" placeholder="商品名，如 鸡蛋 24 个" required>
-      <select name="store" id="store-select" required></select>
-      <input name="price" type="number" step="0.01" min="0" placeholder="当前价格 $（可选）">
-      <input name="target_price" type="number" step="0.01" min="0" placeholder="目标价 $（可选）">
-      <input name="unit" placeholder="规格，如 1 lb（可选）">
-      <input name="url" type="url" placeholder="商品链接（可选，用于自动抓价）">
-      <button type="submit">添加</button>
+      <input name="name" placeholder="English name, e.g. Eggs" required>
+      <input name="name_zh" placeholder="Chinese name, e.g. 鸡蛋">
+      <input name="unit" placeholder="Compare per… lb / egg / oz" required>
+      <input name="target_price" type="number" step="any" min="0" placeholder="Target unit price $ (optional)">
+      <button type="submit">Add product</button>
     </form>
   </div>
 </main>
 <div id="toast"></div>
 
 <script>
-let state = { stores: {}, items: [], filter: "all", selected: null };
+let state = { stores: {}, products: [], selected: null };
 let chart;
 const $ = (s) => document.querySelector(s);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const storeColor = (k) => css("--s-" + k) || css("--muted");
 const money = (v) => v == null ? "–" : "$" + Number(v).toFixed(2);
+const unitMoney = (v) => v == null ? "–" : "$" + Number(v).toFixed(v < 1 ? 3 : 2);
+const qtyText = (q) => q === 1 ? "" : ` / ${+q.toFixed(3)}`;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const nameHtml = (p) => `${esc(p.name)}${p.name_zh ? `<span class="zh">${esc(p.name_zh)}</span>` : ""}`;
 
 function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.style.display = "block";
-  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.style.display = "none", 3500);
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.style.display = "none", 4000);
 }
 
 async function api(path, body) {
   const res = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "请求失败");
+  if (!res.ok) throw new Error(data.error || "Request failed");
   return data;
 }
 
 async function load() {
-  const data = await api("/api/items");
-  state.stores = data.stores; state.items = data.items;
-  renderFilters(); renderRows();
-  $("#store-select").innerHTML = Object.entries(state.stores).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  const data = await api("/api/products");
+  state.stores = data.stores; state.products = data.products;
+  renderMatrix();
+  $("#record-store").innerHTML = '<option value="">Store…</option>' +
+    Object.entries(state.stores).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
   if (state.selected) showDetail(state.selected);
 }
 
-function renderFilters() {
-  const used = [...new Set(state.items.map((i) => i.store))];
-  const chips = [["all", "全部"], ...used.map((k) => [k, state.stores[k] || k])];
-  $("#filters").innerHTML = chips.map(([k, v]) => `<button class="chip ${state.filter === k ? "on" : ""}" data-k="${k}">${esc(v)}</button>`).join("");
-  $("#filters").querySelectorAll(".chip").forEach((b) => b.onclick = () => { state.filter = b.dataset.k; renderFilters(); renderRows(); });
-}
-
-function renderRows() {
-  const items = state.items.filter((i) => state.filter === "all" || i.store === state.filter);
-  $("#empty").style.display = state.items.length ? "none" : "block";
-  $("#rows").innerHTML = items.map((i) => {
-    let change = '<span class="muted">–</span>';
-    if (i.latest != null && i.previous != null && i.latest !== i.previous) {
-      const d = i.latest - i.previous, pct = (d / i.previous * 100).toFixed(0);
-      change = `<span class="${d < 0 ? "down" : "up"}">${d < 0 ? "▼" : "▲"} ${money(Math.abs(d))} (${pct}%)</span>`;
+// Rows are products, columns are the stores that have at least one price.
+function renderMatrix() {
+  const ps = state.products;
+  $("#empty").style.display = ps.length ? "none" : "block";
+  if (!ps.length) { $("#matrix").innerHTML = ""; return; }
+  const used = Object.keys(state.stores).filter((k) => ps.some((p) => p.listings.some((l) => l.store === k && l.unit_price != null)));
+  const head = `<tr><th>Product</th><th>Unit</th>${used.map((k) =>
+    `<th class="num"><span class="dot" style="background:${storeColor(k)}"></span>${esc(state.stores[k])}</th>`).join("")}<th>Cheapest</th></tr>`;
+  const rows = ps.map((p) => {
+    const by = Object.fromEntries(p.listings.map((l) => [l.store, l]));
+    const best = p.listings.find((l) => l.store === p.best_store);
+    const hit = best && p.target_price != null && best.unit_price <= p.target_price ? '<span class="tag">Target hit</span>' : "";
+    const cells = used.map((k) => {
+      const l = by[k];
+      if (!l || l.unit_price == null) return '<td class="cell muted">–</td>';
+      let trend = "";
+      if (l.previous_unit_price != null && Math.abs(l.unit_price - l.previous_unit_price) > 1e-9)
+        trend = l.unit_price < l.previous_unit_price ? ' <span class="down" title="Lower than last time">▼</span>' : ' <span class="up" title="Higher than last time">▲</span>';
+      return `<td class="cell ${k === p.best_store ? "best" : ""}"><span class="u">${unitMoney(l.unit_price)}</span>${trend}
+        <span class="p">${money(l.price)}${qtyText(l.qty)}</span></td>`;
+    }).join("");
+    let cheapest = '<span class="muted">No prices yet</span>';
+    if (best) {
+      const others = p.listings.filter((l) => l.unit_price != null && l.store !== best.store);
+      const save = others.length ? ` <span class="muted">saves ${Math.round((1 - best.unit_price / others[others.length - 1].unit_price) * 100)}% vs priciest</span>` : "";
+      cheapest = `<span class="dot" style="background:${storeColor(best.store)}"></span>${esc(state.stores[best.store])}${save}`;
     }
-    const hit = i.target_price != null && i.latest != null && i.latest <= i.target_price ? '<span class="hit">目标价</span>' : "";
-    return `<tr class="row ${state.selected === i.id ? "sel" : ""}" data-id="${i.id}">
-      <td>${esc(i.name)}${i.unit ? ` <span class="muted">${esc(i.unit)}</span>` : ""}${hit}</td>
-      <td><span class="store">${esc(state.stores[i.store] || i.store)}</span></td>
-      <td class="num">${money(i.latest)}</td><td class="num">${change}</td>
-      <td class="num hide-sm">${money(i.lowest)}</td><td class="num hide-sm">${money(i.target_price)}</td>
-      <td class="hide-sm muted">${i.latest_at ? i.latest_at.slice(5, 16).replace("T", " ") : "–"}</td></tr>`;
+    return `<tr class="row ${state.selected === p.id ? "sel" : ""}" data-id="${p.id}">
+      <td>${nameHtml(p)}${hit}</td><td class="muted">per ${esc(p.unit)}</td>${cells}<td>${cheapest}</td></tr>`;
   }).join("");
-  $("#rows").querySelectorAll("tr.row").forEach((r) => r.onclick = () => showDetail(Number(r.dataset.id)));
+  $("#matrix").innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
+  $("#matrix").querySelectorAll("tr.row").forEach((r) => r.onclick = () => showDetail(Number(r.dataset.id)));
 }
 
 async function showDetail(id) {
-  const item = state.items.find((i) => i.id === id);
-  if (!item) { state.selected = null; $("#detail").style.display = "none"; return; }
-  state.selected = id; renderRows();
+  const p = state.products.find((x) => x.id === id);
+  if (!p) { state.selected = null; $("#detail").style.display = "none"; return; }
+  if (state.selected !== id) $("#record-form").reset();
+  state.selected = id; renderMatrix();
   $("#detail").style.display = "block";
-  $("#d-title").textContent = item.name;
-  const link = item.url ? ` · <a href="${esc(item.url)}" target="_blank" rel="noopener">商品页</a>` : " · 无链接，手动记录";
-  $("#d-meta").innerHTML = `${esc(state.stores[item.store] || item.store)}${link}`;
+  $("#d-title").innerHTML = nameHtml(p);
+  $("#d-meta").textContent = `Compared per ${p.unit}` + (p.target_price != null ? ` · target ${unitMoney(p.target_price)}/${p.unit}` : "");
+
+  const priced = p.listings.filter((l) => l.unit_price != null);
+  const max = Math.max(...priced.map((l) => l.unit_price), 0);
+  $("#bars").innerHTML = priced.length ? priced.map((l) => `
+    <div><span class="dot" style="background:${storeColor(l.store)}"></span>${esc(state.stores[l.store])}</div>
+    <div class="track"><div class="bar" style="width:${(l.unit_price / max * 100).toFixed(1)}%;background:${storeColor(l.store)}"
+      title="${esc(state.stores[l.store])}: ${unitMoney(l.unit_price)}/${esc(p.unit)} (${money(l.price)}${qtyText(l.qty)})"></div></div>
+    <div class="val">${unitMoney(l.unit_price)}/${esc(p.unit)}${l.store === p.best_store ? ' <span class="tag">Cheapest</span>' : ""}</div>`).join("")
+    : '<div class="muted" style="grid-column:1/-1">No prices yet — log one below.</div>';
+
   const hist = await api("/api/history/" + id);
-  const css = getComputedStyle(document.documentElement);
-  const accent = css.getPropertyValue("--accent").trim(), muted = css.getPropertyValue("--muted").trim(), line = css.getPropertyValue("--line").trim();
-  const datasets = [{ label: "价格", data: hist.map((h) => h.price), borderColor: accent, backgroundColor: accent,
-    tension: 0.2, pointRadius: 4, stepped: false }];
-  if (item.target_price != null) datasets.push({ label: "目标价", data: hist.map(() => item.target_price),
-    borderColor: muted, borderDash: [6, 4], pointRadius: 0, borderWidth: 1.5 });
+  $("#hist-table").innerHTML = `<thead><tr><th>Date</th><th>Store</th><th class="num">Pack price</th><th class="num">Units</th><th class="num">Unit price</th><th>Source</th><th>Note</th></tr></thead><tbody>` +
+    hist.slice().reverse().map((h) => `<tr><td>${h.recorded_at.slice(0, 16).replace("T", " ")}</td><td>${esc(state.stores[h.store] || h.store)}</td>
+      <td class="num">${money(h.price)}</td><td class="num">${+h.qty.toFixed(3)}</td><td class="num">${unitMoney(h.unit_price)}</td>
+      <td class="muted">${h.source === "auto" ? "Auto" : "Manual"}</td><td>${esc(h.note)}</td></tr>`).join("") + "</tbody>";
+
+  const muted = css("--muted"), line = css("--line");
+  const when = (h) => h.recorded_at.slice(5, 16).replace("T", " ");
+  const stores = Object.keys(state.stores).filter((k) => hist.some((h) => h.store === k));
+  const datasets = stores.map((k) => ({
+    label: state.stores[k],
+    data: hist.filter((h) => h.store === k).map((h) => ({ x: when(h), y: h.unit_price, h })),
+    borderColor: storeColor(k), backgroundColor: storeColor(k), borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, tension: 0, spanGaps: true,
+  }));
+  if (p.target_price != null) datasets.push({ label: "Target", data: [], borderColor: muted, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 });
+  const labels = [...new Set(hist.map(when))];
+  if (p.target_price != null) datasets[datasets.length - 1].data = labels.map((x) => ({ x, y: p.target_price }));
   if (chart) chart.destroy();
   chart = new Chart($("#chart"), {
     type: "line",
-    data: { labels: hist.map((h) => h.recorded_at.slice(0, 10)), datasets },
+    data: { labels, datasets },
     options: {
-      maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-      plugins: { legend: { display: datasets.length > 1, labels: { color: muted } },
-        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${money(c.parsed.y)}`,
-          afterLabel: (c) => c.datasetIndex === 0 ? [hist[c.dataIndex].source === "auto" ? "自动抓取" : "手动记录", hist[c.dataIndex].note].filter(Boolean).join(" · ") : "" } } },
-      scales: { x: { ticks: { color: muted }, grid: { color: line } },
-        y: { ticks: { color: muted, callback: (v) => money(v) }, grid: { color: line } } },
+      maintainAspectRatio: false, interaction: { mode: "nearest", intersect: false },
+      plugins: {
+        legend: { display: datasets.length > 1, labels: { color: muted, boxWidth: 12, boxHeight: 2 } },
+        tooltip: { callbacks: {
+          label: (c) => `${c.dataset.label}: ${unitMoney(c.parsed.y)}/${p.unit}`,
+          afterLabel: (c) => { const h = c.raw.h; return h ? [`${money(h.price)}${qtyText(h.qty)}`, h.note].filter(Boolean).join(" · ") : ""; },
+        } },
+      },
+      scales: {
+        x: { type: "category", ticks: { color: muted }, grid: { display: false } },
+        y: { ticks: { color: muted, callback: (v) => unitMoney(v) }, grid: { color: line } },
+      },
     },
   });
 }
 
+// Pre-fill the pack size with what was used last time at the chosen store.
+$("#record-store").onchange = (e) => {
+  const p = state.products.find((x) => x.id === state.selected);
+  const l = p && p.listings.find((x) => x.store === e.target.value);
+  $("#record-qty").value = l && l.qty !== 1 ? l.qty : "";
+};
+
 $("#record-form").onsubmit = async (e) => {
   e.preventDefault();
-  const f = new FormData(e.target);
+  const f = Object.fromEntries(new FormData(e.target));
   try {
-    const r = await api("/api/prices", { item_id: state.selected, price: f.get("price"), note: f.get("note") });
-    e.target.reset(); toast(r.alerts.length ? "🔔 " + r.alerts.join("；") : "已记录"); load();
+    const r = await api("/api/prices", { ...f, product_id: state.selected });
+    e.target.reset(); toast(r.alerts.length ? "🔔 " + r.alerts.join(" · ") : "Price logged"); load();
   } catch (err) { toast(err.message); }
 };
 
 $("#delete-btn").onclick = async () => {
-  if (!confirm("删除这个商品和它所有的价格记录？")) return;
-  await api(`/api/items/${state.selected}/delete`, {});
+  if (!confirm("Delete this product and all of its prices?")) return;
+  await api(`/api/products/${state.selected}/delete`, {});
   state.selected = null; $("#detail").style.display = "none"; load();
 };
 
 $("#add-form").onsubmit = async (e) => {
   e.preventDefault();
   try {
-    const r = await api("/api/items", Object.fromEntries(new FormData(e.target)));
-    e.target.reset(); state.selected = r.id; toast("已添加"); load();
+    const r = await api("/api/products", Object.fromEntries(new FormData(e.target)));
+    e.target.reset(); state.selected = r.id; toast("Product added — now log its price at each store"); load();
   } catch (err) { toast(err.message); }
 };
 

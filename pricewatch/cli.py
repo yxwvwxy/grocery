@@ -21,79 +21,115 @@ def _applescript_str(s):
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def check_alerts(item, new_price, previous):
-    """Return alert messages when the new price is a drop or hits the target."""
+def display_name(product):
+    return product["name"] + (" " + product["name_zh"] if product["name_zh"] else "")
+
+
+def unit_money(v):
+    """Unit prices under $1 (per egg, per oz) need a third decimal to be comparable."""
+    return "${:.3f}".format(v) if v < 1 else "${:.2f}".format(v)
+
+
+def record_and_alert(conn, product_id, store, price, qty=1, source="manual", note=None, url=None):
+    """Record a pack price at a store; return alerts for drops, targets and a new cheapest store."""
+    product = db.get_product(conn, product_id)
+    before = next(p for p in db.overview(conn) if p["id"] == product_id)
+    old = next((l for l in before["listings"] if l["store"] == store), None)
+
+    listing_id = db.get_or_create_listing(conn, product_id, store, url=url, qty=qty if url else None)
+    db.record_price(conn, listing_id, price, qty=qty, source=source, note=note)
+
+    unit = price / qty
+    name = display_name(product)
+    store_name = STORES.get(store, store)
+    per = "/" + product["unit"]
     alerts = []
-    name = "{} @ {}".format(item["name"], STORES.get(item["store"], item["store"]))
-    if previous is not None and new_price < previous:
-        alerts.append("{} 降价: ${:.2f} → ${:.2f}".format(name, previous, new_price))
-    target = item["target_price"]
-    if target is not None and new_price <= target:
-        alerts.append("{} 达到目标价 ${:.2f}（现价 ${:.2f}）".format(name, target, new_price))
-    return alerts
-
-
-def record_and_alert(conn, item_id, price, source, note=None):
-    item = db.get_item(conn, item_id)
-    previous = next((i["latest"] for i in db.list_items(conn) if i["id"] == item_id), None)
-    db.record_price(conn, item_id, price, source=source, note=note)
-    alerts = check_alerts(item, price, previous)
+    if old and old["unit_price"] is not None and unit < old["unit_price"] - 1e-9:
+        alerts.append("{} dropped at {}: {} → {}{}".format(
+            name, store_name, unit_money(old["unit_price"]), unit_money(unit), per))
+    others = [l["unit_price"] for l in before["listings"] if l["store"] != store and l["unit_price"] is not None]
+    was_best = before["best_store"] == store
+    if others and not was_best and unit < min(others):
+        alerts.append("{} is now cheapest at {}: {}{}".format(name, store_name, unit_money(unit), per))
+    target = product["target_price"]
+    if target is not None and unit <= target:
+        alerts.append("{} hit target at {}: {}{} (target {})".format(
+            name, store_name, unit_money(unit), per, unit_money(target)))
     for msg in alerts:
         print("  🔔 " + msg)
-        notify("买菜价格提醒", msg)
+        notify("Grocery price alert", msg)
     return alerts
+
+
+def _store(store):
+    if store not in STORES:
+        sys.exit("未知超市: {}。可选: {}".format(store, ", ".join(STORES)))
+    return store
+
+
+def _product(conn, product_id):
+    p = db.get_product(conn, product_id)
+    if not p:
+        sys.exit("没有 #{} 这个商品".format(product_id))
+    return p
 
 
 def cmd_add(conn, args):
-    if args.store not in STORES:
-        sys.exit("未知超市: {}。可选: {}".format(args.store, ", ".join(STORES)))
-    item_id = db.add_item(conn, args.name, args.store, args.url, args.unit, args.target)
-    print("已添加 #{}: {} @ {}".format(item_id, args.name, STORES[args.store]))
-    if args.price is not None:
-        record_and_alert(conn, item_id, args.price, "manual")
-        print("  记录价格 ${:.2f}".format(args.price))
+    pid = db.add_product(conn, args.name, args.unit, args.zh, args.target)
+    print("已添加 #{}: {}（按 {} 比价）".format(pid, display_name(db.get_product(conn, pid)), args.unit))
 
 
 def cmd_record(conn, args):
-    if not db.get_item(conn, args.item_id):
-        sys.exit("没有 #{} 这个商品".format(args.item_id))
-    record_and_alert(conn, args.item_id, args.price, "manual", args.note)
-    print("已记录 #{}: ${:.2f}".format(args.item_id, args.price))
+    _product(conn, args.product_id)
+    record_and_alert(conn, args.product_id, _store(args.store), args.price, args.qty, note=args.note)
+    print("已记录 #{} @ {}: ${:.2f} / {:g}".format(args.product_id, STORES[args.store], args.price, args.qty))
+
+
+def cmd_link(conn, args):
+    _product(conn, args.product_id)
+    db.get_or_create_listing(conn, args.product_id, _store(args.store), url=args.url, qty=args.qty)
+    print("已关联 #{} @ {}，`check` 时会自动抓价".format(args.product_id, STORES[args.store]))
 
 
 def cmd_remove(conn, args):
-    db.remove_item(conn, args.item_id)
-    print("已删除 #{}".format(args.item_id))
+    db.remove_product(conn, args.product_id)
+    print("已删除 #{}".format(args.product_id))
 
 
-def cmd_list(conn, args):
-    items = db.list_items(conn)
-    if not items:
+def cmd_compare(conn, args):
+    products = db.overview(conn)
+    if not products:
         print("还没有商品。用 `python3 -m pricewatch add` 添加。")
         return
-    print("{:>4}  {:<28} {:<18} {:>9} {:>9} {:>9}  {}".format(
-        "ID", "商品", "超市", "现价", "最低", "目标", "更新时间"))
-    for i in items:
-        fmt = lambda v: "-" if v is None else "${:.2f}".format(v)
-        print("{:>4}  {:<28} {:<18} {:>9} {:>9} {:>9}  {}".format(
-            i["id"], i["name"][:28], STORES.get(i["store"], i["store"]),
-            fmt(i["latest"]), fmt(i["lowest"]), fmt(i["target_price"]),
-            (i["latest_at"] or "-")[:16].replace("T", " ")))
+    for p in products:
+        if args.product_id and p["id"] != args.product_id:
+            continue
+        print("#{} {}  (per {})".format(p["id"], display_name(p), p["unit"]))
+        if not p["listings"]:
+            print("    还没有价格")
+        for l in p["listings"]:
+            if l["unit_price"] is None:
+                continue
+            best = "  ← 最便宜" if l["store"] == p["best_store"] else ""
+            print("    {:<20} {:>9}/{:<6} (${:.2f} / {:g}){}".format(
+                STORES.get(l["store"], l["store"]), unit_money(l["unit_price"]), p["unit"],
+                l["price"], l["qty"], best))
+        print()
 
 
 def cmd_check(conn, args):
-    """Fetch the current price of every item that has a product URL."""
-    items = [i for i in db.list_items(conn) if i["url"]]
+    """Fetch the current price of every store listing that has a product URL."""
+    listings = db.listings_with_url(conn)
     if args.store:
-        items = [i for i in items if i["store"] == args.store]
-    if not items:
+        listings = [l for l in listings if l["store"] == args.store]
+    if not listings:
         print("没有带链接的商品可以自动抓取。")
         return
     failed = 0
-    for i in items:
-        label = "#{} {} @ {}".format(i["id"], i["name"], STORES.get(i["store"], i["store"]))
+    for l in listings:
+        label = "{} @ {}".format(display_name(l), STORES.get(l["store"], l["store"]))
         try:
-            price = fetch_price(i["url"])
+            price = fetch_price(l["url"])
         except FetchError as e:
             print("✗ {}: 抓取失败 ({})".format(label, e))
             failed += 1
@@ -103,9 +139,9 @@ def cmd_check(conn, args):
             failed += 1
             continue
         print("✓ {}: ${:.2f}".format(label, price))
-        record_and_alert(conn, i["id"], price, "auto")
+        record_and_alert(conn, l["product_id"], l["store"], price, l["qty"], source="auto")
     if failed:
-        print("\n{} 个商品没抓到价格，可以用 `record` 手动记录。".format(failed))
+        print("\n{} 个没抓到价格，可以用 `record` 手动记录。".format(failed))
 
 
 def cmd_serve(conn, args):
@@ -114,33 +150,42 @@ def cmd_serve(conn, args):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(prog="pricewatch", description="买菜价格追踪")
+    p = argparse.ArgumentParser(prog="pricewatch", description="买菜比价")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    a = sub.add_parser("add", help="添加要追踪的商品")
-    a.add_argument("name")
-    a.add_argument("--store", required=True, help="超市: " + ", ".join(STORES))
-    a.add_argument("--url", help="商品页面链接（有链接才能自动抓价格）")
-    a.add_argument("--unit", help="规格，如 '1 lb'、'12 ct'")
-    a.add_argument("--target", type=float, help="目标价，低于等于时提醒")
-    a.add_argument("--price", type=float, help="顺便记录当前价格")
+    a = sub.add_parser("add", help="添加要比价的商品")
+    a.add_argument("name", help="英文名")
+    a.add_argument("--zh", help="中文名")
+    a.add_argument("--unit", required=True, help="比价单位，如 lb、egg、oz")
+    a.add_argument("--target", type=float, help="目标单价，任一超市低于等于时提醒")
     a.set_defaults(func=cmd_add)
 
-    r = sub.add_parser("record", help="手动记录一次价格")
-    r.add_argument("item_id", type=int)
-    r.add_argument("price", type=float)
+    r = sub.add_parser("record", help="记录某超市的价格")
+    r.add_argument("product_id", type=int)
+    r.add_argument("store", help="超市: " + ", ".join(STORES))
+    r.add_argument("price", type=float, help="整包价格")
+    r.add_argument("--qty", type=float, default=1, help="一包有几个单位（默认 1）")
     r.add_argument("--note", help="备注，如 '打折'、'会员价'")
     r.set_defaults(func=cmd_record)
 
-    rm = sub.add_parser("remove", help="删除商品及其价格记录")
-    rm.add_argument("item_id", type=int)
+    k = sub.add_parser("link", help="给某超市的商品关联页面链接，用于自动抓价")
+    k.add_argument("product_id", type=int)
+    k.add_argument("store")
+    k.add_argument("url")
+    k.add_argument("--qty", type=float, default=1, help="这个链接的一包有几个单位")
+    k.set_defaults(func=cmd_link)
+
+    rm = sub.add_parser("remove", help="删除商品及其所有价格")
+    rm.add_argument("product_id", type=int)
     rm.set_defaults(func=cmd_remove)
 
-    sub.add_parser("list", help="列出所有商品和最新价格").set_defaults(func=cmd_list)
+    c = sub.add_parser("compare", help="对比各超市的单价")
+    c.add_argument("product_id", type=int, nargs="?")
+    c.set_defaults(func=cmd_compare)
 
-    c = sub.add_parser("check", help="自动抓取所有带链接商品的价格")
-    c.add_argument("--store", help="只抓这家超市")
-    c.set_defaults(func=cmd_check)
+    ch = sub.add_parser("check", help="自动抓取所有带链接的价格")
+    ch.add_argument("--store", help="只抓这家超市")
+    ch.set_defaults(func=cmd_check)
 
     s = sub.add_parser("serve", help="打开本地网页看板")
     s.add_argument("--port", type=int, default=8765)

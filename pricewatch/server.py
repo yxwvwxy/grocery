@@ -1,4 +1,4 @@
-"""Tiny local web server for the price dashboard (stdlib only)."""
+"""Tiny local web server for the price comparison dashboard (stdlib only)."""
 import json
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -31,8 +31,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         conn = db.connect()
         try:
-            if path == "/api/items":
-                return self._json({"stores": STORES, "items": db.list_items(conn)})
+            if path == "/api/products":
+                return self._json({"stores": STORES, "products": db.overview(conn)})
             if path.startswith("/api/history/"):
                 return self._json(db.history(conn, int(path.rsplit("/", 1)[1])))
         finally:
@@ -52,25 +52,25 @@ class Handler(BaseHTTPRequestHandler):
         conn = db.connect()
         try:
             data = self._body()
-            if path == "/api/items":
-                if data.get("store") not in STORES or not data.get("name"):
-                    return self._json({"error": "需要商品名和超市"}, 400)
-                item_id = db.add_item(
-                    conn, data["name"].strip(), data["store"], data.get("url") or None,
-                    data.get("unit") or None, _num(data.get("target_price")),
+            if path == "/api/products":
+                name, unit = (data.get("name") or "").strip(), (data.get("unit") or "").strip()
+                if not name or not unit:
+                    return self._json({"error": "English name and unit are required"}, 400)
+                pid = db.add_product(
+                    conn, name, unit, (data.get("name_zh") or "").strip() or None, _num(data.get("target_price"))
                 )
-                price = _num(data.get("price"))
-                if price is not None:
-                    record_and_alert(conn, item_id, price, "manual")
-                return self._json({"id": item_id})
+                return self._json({"id": pid})
             if path == "/api/prices":
-                price = _num(data.get("price"))
-                if price is None or not db.get_item(conn, int(data["item_id"])):
-                    return self._json({"error": "价格或商品无效"}, 400)
-                alerts = record_and_alert(conn, int(data["item_id"]), price, "manual", data.get("note") or None)
+                pid, store, price = int(data["product_id"]), data.get("store"), _num(data.get("price"))
+                qty = _num(data.get("qty")) or 1
+                if store not in STORES or price is None or price <= 0 or qty <= 0 or not db.get_product(conn, pid):
+                    return self._json({"error": "Pick a store and enter a valid price"}, 400)
+                alerts = record_and_alert(
+                    conn, pid, store, price, qty, note=data.get("note") or None, url=data.get("url") or None
+                )
                 return self._json({"alerts": alerts})
-            if path.startswith("/api/items/") and path.endswith("/delete"):
-                db.remove_item(conn, int(path.split("/")[3]))
+            if path.startswith("/api/products/") and path.endswith("/delete"):
+                db.remove_product(conn, int(path.split("/")[3]))
                 return self._json({"ok": True})
             return self._json({"error": "not found"}, 404)
         except (ValueError, KeyError) as e:
