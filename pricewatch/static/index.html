@@ -151,7 +151,13 @@ function render() {
 }
 
 // Notes are recorded as "<brand/variant>, <date>查价" — show just the brand/variant part.
-const itemLabel = (note) => note ? esc(note.replace(/[,，]\s*\d{1,2}\/\d{1,2}查价\s*$/, "")) : '<span class="muted">—</span>';
+// Prefer the listing's own variant (brand/size); fall back to parsing it out of the price note
+// for older listings recorded before per-variant tracking existed.
+const itemLabel = (l) => {
+  if (l.variant) return esc(l.variant);
+  const note = l.note;
+  return note ? esc(note.replace(/[,，]\s*\d{1,2}\/\d{1,2}查价\s*$/, "")) : '<span class="muted">—</span>';
+};
 
 function renderResults(ps) {
   $("#no-match").style.display = ps.length ? "none" : "block";
@@ -161,7 +167,7 @@ function renderResults(ps) {
       ? priced.map((l, i) => `<tr><td>${i + 1}</td>
           <td>${l.image_url ? `<img src="${esc(l.image_url)}" alt="" class="thumb">` : '<span class="thumb empty"></span>'}</td>
           <td>${storeBadge(l.store)}${esc(state.stores[l.store])}</td>
-          <td>${itemLabel(l.note)}</td>
+          <td>${itemLabel(l)}</td>
           <td class="num"><span class="u">${unitMoney(l.unit_price)}</span>/${esc(p.unit)}${i === 0 ? ' <span class="tag">Cheapest</span>' : ""}</td>
           <td class="num muted">${money(l.price)}${qtyText(l.qty)}</td></tr>`).join("")
       : `<tr><td colspan="6" class="muted">No prices logged yet</td></tr>`;
@@ -183,7 +189,9 @@ function renderMatrix(ps) {
   const head = `<tr><th>Product</th><th>Unit</th>${used.map((k) =>
     `<th class="num">${storeBadge(k)}${esc(state.stores[k])}</th>`).join("")}<th>Cheapest</th></tr>`;
   const rows = ps.map((p) => {
-    const by = Object.fromEntries(p.listings.map((l) => [l.store, l]));
+    // listings are pre-sorted cheapest-first; keep only each store's cheapest variant for this overview row
+    const by = {};
+    for (const l of p.listings) if (!(l.store in by)) by[l.store] = l;
     const best = p.listings.find((l) => l.store === p.best_store);
     const hit = best && p.target_price != null && best.unit_price <= p.target_price ? '<span class="tag">Target hit</span>' : "";
     const cells = used.map((k) => {
@@ -194,7 +202,7 @@ function renderMatrix(ps) {
         trend = l.unit_price < l.previous_unit_price ? ' <span class="down" title="Lower than last time">▼</span>' : ' <span class="up" title="Higher than last time">▲</span>';
       return `<td class="cell ${k === p.best_store ? "best" : ""}" title="${esc(l.note || "")}"><span class="u">${unitMoney(l.unit_price)}</span>${trend}
         <span class="p">${money(l.price)}${qtyText(l.qty)}</span>
-        <span class="p item">${itemLabel(l.note)}</span></td>`;
+        <span class="p item">${itemLabel(l)}</span></td>`;
     }).join("");
     let cheapest = '<span class="muted">No prices yet</span>';
     if (best) {

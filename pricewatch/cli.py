@@ -30,13 +30,16 @@ def unit_money(v):
     return "${:.3f}".format(v) if v < 1 else "${:.2f}".format(v)
 
 
-def record_and_alert(conn, product_id, store, price, qty=1, source="manual", note=None, url=None):
-    """Record a pack price at a store; return alerts for drops, targets and a new cheapest store."""
+def record_and_alert(conn, product_id, store, price, qty=1, source="manual", note=None, url=None, variant=""):
+    """Record a pack price for one variant at a store; return alerts for drops, targets and a new cheapest store.
+
+    A store can carry several variants (brands/sizes) of the same product, each tracked separately.
+    """
     product = db.get_product(conn, product_id)
     before = next(p for p in db.overview(conn) if p["id"] == product_id)
-    old = next((l for l in before["listings"] if l["store"] == store), None)
+    old = next((l for l in before["listings"] if l["store"] == store and l["variant"] == variant), None)
 
-    listing_id = db.get_or_create_listing(conn, product_id, store, url=url, qty=qty if url else None)
+    listing_id = db.get_or_create_listing(conn, product_id, store, variant=variant, url=url, qty=qty if url else None)
     db.record_price(conn, listing_id, price, qty=qty, source=source, note=note)
 
     unit = price / qty
@@ -47,7 +50,8 @@ def record_and_alert(conn, product_id, store, price, qty=1, source="manual", not
     if old and old["unit_price"] is not None and unit < old["unit_price"] - 1e-9:
         alerts.append("{} dropped at {}: {} → {}{}".format(
             name, store_name, unit_money(old["unit_price"]), unit_money(unit), per))
-    others = [l["unit_price"] for l in before["listings"] if l["store"] != store and l["unit_price"] is not None]
+    others = [l["unit_price"] for l in before["listings"]
+              if not (l["store"] == store and l["variant"] == variant) and l["unit_price"] is not None]
     was_best = before["best_store"] == store
     if others and not was_best and unit < min(others):
         alerts.append("{} is now cheapest at {}: {}{}".format(name, store_name, unit_money(unit), per))
@@ -81,13 +85,15 @@ def cmd_add(conn, args):
 
 def cmd_record(conn, args):
     _product(conn, args.product_id)
-    record_and_alert(conn, args.product_id, _store(args.store), args.price, args.qty, note=args.note)
-    print("已记录 #{} @ {}: ${:.2f} / {:g}".format(args.product_id, STORES[args.store], args.price, args.qty))
+    variant = args.variant or ""
+    record_and_alert(conn, args.product_id, _store(args.store), args.price, args.qty, note=args.note, variant=variant)
+    label = STORES[args.store] + (" ({})".format(variant) if variant else "")
+    print("已记录 #{} @ {}: ${:.2f} / {:g}".format(args.product_id, label, args.price, args.qty))
 
 
 def cmd_link(conn, args):
     _product(conn, args.product_id)
-    db.get_or_create_listing(conn, args.product_id, _store(args.store), url=args.url, qty=args.qty)
+    db.get_or_create_listing(conn, args.product_id, _store(args.store), variant=args.variant or "", url=args.url, qty=args.qty)
     print("已关联 #{} @ {}，`check` 时会自动抓价".format(args.product_id, STORES[args.store]))
 
 
@@ -111,8 +117,9 @@ def cmd_compare(conn, args):
             if l["unit_price"] is None:
                 continue
             best = "  ← 最便宜" if l["store"] == p["best_store"] else ""
-            print("    {:<20} {:>9}/{:<6} (${:.2f} / {:g}){}".format(
-                STORES.get(l["store"], l["store"]), unit_money(l["unit_price"]), p["unit"],
+            label = STORES.get(l["store"], l["store"]) + (" ({})".format(l["variant"]) if l["variant"] else "")
+            print("    {:<28} {:>9}/{:<6} (${:.2f} / {:g}){}".format(
+                label, unit_money(l["unit_price"]), p["unit"],
                 l["price"], l["qty"], best))
         print()
 
@@ -139,7 +146,7 @@ def cmd_check(conn, args):
             failed += 1
             continue
         print("✓ {}: ${:.2f}".format(label, price))
-        record_and_alert(conn, l["product_id"], l["store"], price, l["qty"], source="auto")
+        record_and_alert(conn, l["product_id"], l["store"], price, l["qty"], source="auto", variant=l["variant"])
     if failed:
         print("\n{} 个没抓到价格，可以用 `record` 手动记录。".format(failed))
 
@@ -166,6 +173,7 @@ def main(argv=None):
     r.add_argument("price", type=float, help="整包价格")
     r.add_argument("--qty", type=float, default=1, help="一包有几个单位（默认 1）")
     r.add_argument("--note", help="备注，如 '打折'、'会员价'")
+    r.add_argument("--variant", help="这家店卖的具体品牌/规格，如 \"Eggland's Best 12ct\"（同一家店可以有多个variant）")
     r.set_defaults(func=cmd_record)
 
     k = sub.add_parser("link", help="给某超市的商品关联页面链接，用于自动抓价")
@@ -173,6 +181,7 @@ def main(argv=None):
     k.add_argument("store")
     k.add_argument("url")
     k.add_argument("--qty", type=float, default=1, help="这个链接的一包有几个单位")
+    k.add_argument("--variant", help="这家店卖的具体品牌/规格")
     k.set_defaults(func=cmd_link)
 
     rm = sub.add_parser("remove", help="删除商品及其所有价格")

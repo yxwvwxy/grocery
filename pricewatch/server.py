@@ -83,7 +83,8 @@ class Handler(BaseHTTPRequestHandler):
                 if store not in STORES or price is None or price <= 0 or qty <= 0 or not db.get_product(conn, pid):
                     return self._json({"error": "Pick a store and enter a valid price"}, 400)
                 alerts = record_and_alert(
-                    conn, pid, store, price, qty, note=data.get("note") or None, url=data.get("url") or None
+                    conn, pid, store, price, qty, note=data.get("note") or None, url=data.get("url") or None,
+                    variant=(data.get("variant") or "").strip(),
                 )
                 return self._json({"alerts": alerts})
             if path.startswith("/api/products/") and path.endswith("/delete"):

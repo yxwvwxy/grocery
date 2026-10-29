@@ -24,10 +24,12 @@ CREATE TABLE IF NOT EXISTS listings (
     id         INTEGER PRIMARY KEY,
     product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     store      TEXT NOT NULL,
+    variant    TEXT NOT NULL DEFAULT '', -- brand/size sold at this store, e.g. "Eggland's Best 12ct";
+                                         -- a store can carry several variants of the same product
     url        TEXT,                    -- product page, for automatic price checks
     image_url  TEXT,                    -- product photo, as shown on the store's own site
     qty        REAL NOT NULL DEFAULT 1, -- units per pack at this store, used by auto checks
-    UNIQUE (product_id, store)
+    UNIQUE (product_id, store, variant)
 );
 CREATE TABLE IF NOT EXISTS prices (
     id          INTEGER PRIMARY KEY,
@@ -56,6 +58,28 @@ def connect(path=DB_PATH):
     if "image_url" not in cols:
         conn.execute("ALTER TABLE listings ADD COLUMN image_url TEXT")
         conn.commit()
+    if "variant" not in cols:
+        # SQLite can't alter a UNIQUE constraint in place: rebuild the table,
+        # keeping existing rows as the '' (unnamed) variant at each store.
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.executescript("""
+            ALTER TABLE listings RENAME TO listings_old;
+            CREATE TABLE listings (
+                id         INTEGER PRIMARY KEY,
+                product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                store      TEXT NOT NULL,
+                variant    TEXT NOT NULL DEFAULT '',
+                url        TEXT,
+                image_url  TEXT,
+                qty        REAL NOT NULL DEFAULT 1,
+                UNIQUE (product_id, store, variant)
+            );
+            INSERT INTO listings (id, product_id, store, variant, url, image_url, qty)
+                SELECT id, product_id, store, '', url, image_url, qty FROM listings_old;
+            DROP TABLE listings_old;
+        """)
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
     return conn
 
 
@@ -77,29 +101,39 @@ def get_product(conn, product_id):
     return conn.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
 
 
-def set_listing_image(conn, product_id, store, image_url):
+def set_listing_image(conn, product_id, store, image_url, variant=""):
     """Attach a product photo (as shown on the store's own site) to a listing."""
     conn.execute(
-        "INSERT OR IGNORE INTO listings (product_id, store) VALUES (?, ?)", (product_id, store)
+        "INSERT OR IGNORE INTO listings (product_id, store, variant) VALUES (?, ?, ?)", (product_id, store, variant)
     )
     conn.execute(
-        "UPDATE listings SET image_url = ? WHERE product_id = ? AND store = ?", (image_url, product_id, store)
+        "UPDATE listings SET image_url = ? WHERE product_id = ? AND store = ? AND variant = ?",
+        (image_url, product_id, store, variant),
     )
     conn.commit()
 
 
-def get_or_create_listing(conn, product_id, store, url=None, qty=None):
-    """Return the listing id for (product, store), creating it and updating url/qty when given."""
+def get_or_create_listing(conn, product_id, store, variant="", url=None, qty=None):
+    """Return the listing id for (product, store, variant), creating it and updating url/qty when given.
+
+    A store can carry several variants (brands/sizes) of the same product; each is tracked separately.
+    """
     conn.execute(
-        "INSERT OR IGNORE INTO listings (product_id, store) VALUES (?, ?)", (product_id, store)
+        "INSERT OR IGNORE INTO listings (product_id, store, variant) VALUES (?, ?, ?)", (product_id, store, variant)
     )
     if url:
-        conn.execute("UPDATE listings SET url = ? WHERE product_id = ? AND store = ?", (url, product_id, store))
+        conn.execute(
+            "UPDATE listings SET url = ? WHERE product_id = ? AND store = ? AND variant = ?",
+            (url, product_id, store, variant),
+        )
     if qty:
-        conn.execute("UPDATE listings SET qty = ? WHERE product_id = ? AND store = ?", (qty, product_id, store))
+        conn.execute(
+            "UPDATE listings SET qty = ? WHERE product_id = ? AND store = ? AND variant = ?",
+            (qty, product_id, store, variant),
+        )
     conn.commit()
     return conn.execute(
-        "SELECT id FROM listings WHERE product_id = ? AND store = ?", (product_id, store)
+        "SELECT id FROM listings WHERE product_id = ? AND store = ? AND variant = ?", (product_id, store, variant)
     ).fetchone()["id"]
 
 
@@ -136,6 +170,7 @@ def overview(conn):
         listings_by_product[l["product_id"]].append({
             "id": l["id"],
             "store": l["store"],
+            "variant": l["variant"],
             "url": l["url"],
             "image_url": l["image_url"],
             "price": hist[-1]["price"] if hist else None,
