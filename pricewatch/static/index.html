@@ -47,6 +47,8 @@
   tr.row:hover td.cell.best, tr.row.sel td.cell.best { background: var(--best); }
   .tag { font-size: 11px; color: #fff; background: var(--down); border-radius: 6px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
   .store-icon { width: 16px; height: 16px; border-radius: 4px; margin-right: 6px; vertical-align: -3px; object-fit: cover; }
+  .thumb { display: inline-block; width: 56px; height: 56px; border-radius: 8px; object-fit: contain; background: var(--chip); border: 1px solid var(--line); }
+  .thumb.empty { background: transparent; }
   .down { color: var(--down); } .up { color: var(--up); }
   .bars { display: grid; grid-template-columns: max-content 1fr max-content; gap: 6px 10px; align-items: center; margin: 12px 0 4px; }
   .bars .track { height: 14px; }
@@ -148,20 +150,25 @@ function render() {
   if (matches) renderResults(matches); else renderMatrix(state.products);
 }
 
+// Notes are recorded as "<brand/variant>, <date>查价" — show just the brand/variant part.
+const itemLabel = (note) => note ? esc(note.replace(/[,，]\s*\d{1,2}\/\d{1,2}查价\s*$/, "")) : '<span class="muted">—</span>';
+
 function renderResults(ps) {
   $("#no-match").style.display = ps.length ? "none" : "block";
   $("#results").innerHTML = ps.map((p) => {
     const priced = p.listings.filter((l) => l.unit_price != null); // already ranked cheapest-first by the server
     const rows = priced.length
       ? priced.map((l, i) => `<tr><td>${i + 1}</td>
+          <td>${l.image_url ? `<img src="${esc(l.image_url)}" alt="" class="thumb">` : '<span class="thumb empty"></span>'}</td>
           <td>${storeBadge(l.store)}${esc(state.stores[l.store])}</td>
+          <td>${itemLabel(l.note)}</td>
           <td class="num"><span class="u">${unitMoney(l.unit_price)}</span>/${esc(p.unit)}${i === 0 ? ' <span class="tag">Cheapest</span>' : ""}</td>
           <td class="num muted">${money(l.price)}${qtyText(l.qty)}</td></tr>`).join("")
-      : `<tr><td colspan="4" class="muted">No prices logged yet</td></tr>`;
+      : `<tr><td colspan="6" class="muted">No prices logged yet</td></tr>`;
     return `<div style="margin-bottom:20px">
       <h2 style="margin-bottom:8px" class="row" data-id="${p.id}">${nameHtml(p)}</h2>
       <div class="muted" style="margin:-6px 0 8px">per ${esc(p.unit)}</div>
-      <div class="tablewrap"><table><thead><tr><th>#</th><th>Store</th><th class="num">Unit price</th><th class="num">Pack</th></tr></thead>
+      <div class="tablewrap"><table><thead><tr><th>#</th><th></th><th>Store</th><th>Item</th><th class="num">Unit price</th><th class="num">Pack</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
     </div>`;
   }).join("");
@@ -185,8 +192,9 @@ function renderMatrix(ps) {
       let trend = "";
       if (l.previous_unit_price != null && Math.abs(l.unit_price - l.previous_unit_price) > 1e-9)
         trend = l.unit_price < l.previous_unit_price ? ' <span class="down" title="Lower than last time">▼</span>' : ' <span class="up" title="Higher than last time">▲</span>';
-      return `<td class="cell ${k === p.best_store ? "best" : ""}"><span class="u">${unitMoney(l.unit_price)}</span>${trend}
-        <span class="p">${money(l.price)}${qtyText(l.qty)}</span></td>`;
+      return `<td class="cell ${k === p.best_store ? "best" : ""}" title="${esc(l.note || "")}"><span class="u">${unitMoney(l.unit_price)}</span>${trend}
+        <span class="p">${money(l.price)}${qtyText(l.qty)}</span>
+        <span class="p item">${itemLabel(l.note)}</span></td>`;
     }).join("");
     let cheapest = '<span class="muted">No prices yet</span>';
     if (best) {
@@ -243,8 +251,10 @@ async function showDetail(id) {
     options: {
       maintainAspectRatio: false, interaction: { mode: "nearest", intersect: false },
       plugins: {
+        title: { display: true, text: p.name + (p.name_zh ? ` ${p.name_zh}` : ""), color: css("--text"), font: { size: 13, weight: "normal" }, padding: { bottom: 12 } },
         legend: { display: datasets.length > 1, labels: { color: muted, boxWidth: 12, boxHeight: 2 } },
         tooltip: { callbacks: {
+          title: (items) => `${p.name}${p.name_zh ? " " + p.name_zh : ""} — ${items[0]?.label ?? ""}`,
           label: (c) => `${c.dataset.label}: ${unitMoney(c.parsed.y)}/${p.unit}`,
           afterLabel: (c) => { const h = c.raw.h; return h ? [`${money(h.price)}${qtyText(h.qty)}`, h.note].filter(Boolean).join(" · ") : ""; },
         } },

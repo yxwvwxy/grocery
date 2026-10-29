@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS listings (
     product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     store      TEXT NOT NULL,
     url        TEXT,                    -- product page, for automatic price checks
+    image_url  TEXT,                    -- product photo, as shown on the store's own site
     qty        REAL NOT NULL DEFAULT 1, -- units per pack at this store, used by auto checks
     UNIQUE (product_id, store)
 );
@@ -51,6 +52,10 @@ def connect(path=DB_PATH):
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(listings)")}
+    if "image_url" not in cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN image_url TEXT")
+        conn.commit()
     return conn
 
 
@@ -70,6 +75,17 @@ def remove_product(conn, product_id):
 
 def get_product(conn, product_id):
     return conn.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
+
+
+def set_listing_image(conn, product_id, store, image_url):
+    """Attach a product photo (as shown on the store's own site) to a listing."""
+    conn.execute(
+        "INSERT OR IGNORE INTO listings (product_id, store) VALUES (?, ?)", (product_id, store)
+    )
+    conn.execute(
+        "UPDATE listings SET image_url = ? WHERE product_id = ? AND store = ?", (image_url, product_id, store)
+    )
+    conn.commit()
 
 
 def get_or_create_listing(conn, product_id, store, url=None, qty=None):
@@ -121,12 +137,14 @@ def overview(conn):
             "id": l["id"],
             "store": l["store"],
             "url": l["url"],
+            "image_url": l["image_url"],
             "price": hist[-1]["price"] if hist else None,
             "qty": hist[-1]["qty"] if hist else l["qty"],
             "unit_price": units[-1] if units else None,
             "previous_unit_price": units[-2] if len(units) > 1 else None,
             "lowest_unit_price": min(units) if units else None,
             "recorded_at": hist[-1]["recorded_at"] if hist else None,
+            "note": hist[-1]["note"] if hist else None,
         })
     for p in products:
         ls = listings_by_product[p["id"]]

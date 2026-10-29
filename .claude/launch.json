@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pricewatch",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "pricewatch", "serve"],
+      "port": 8765
+    }
+  ]
+}
