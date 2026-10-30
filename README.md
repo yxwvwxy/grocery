@@ -1,40 +1,48 @@
-# Grocery Price Compare 买菜比价
+# Grocery Price Compare
 
-对比同一种商品在 ShopRite、H Mart、Costco、99 Ranch、Target、Walmart 的价格。按**单价**（每磅、每个、每盎司…）比较，所以不同包装大小也能直接比。某家店降价、变成最便宜、或达到目标单价时，会弹出 macOS 通知。
+Compare the price of the same product across ShopRite, H Mart, Costco, 99 Ranch, Target and Walmart. Prices are compared by **unit price** (per lb, per egg, per fl oz…), so different pack sizes compare directly. Prices are looked up by Claude on each store's official website.
 
-只用 Python 自带的库，不用安装依赖。数据存在 `data/prices.db`（SQLite，不会上传到 git）。
+Uses only the Python standard library, so there is nothing to install. Data is stored in `data/prices.db` (SQLite), which is tracked in git.
 
-## 网页看板（英文界面）
+## Web dashboard
 
 ```bash
 python3 -m pricewatch serve
 ```
 
-浏览器会打开 http://127.0.0.1:8765：
+This opens http://127.0.0.1:8765 in your browser. The page is served by a server running on your own computer: the link only works while the command above is running. If you close that terminal (or press Ctrl+C), the link stops working; run the command again to bring it back.
 
-- 对比表：每行一个商品（英文名 + 中文名），每列一家超市，最便宜的那格高亮
-- 点一个商品：各超市最新单价的柱状图、单价走势图、全部记录，以及记录新价格的表单
-- 记录价格时填**整包价格**和**一包有几个单位**，例如 Costco 鸡蛋 $7.49 / 24
+What the dashboard does:
 
-## 命令行
+- **Comparison table**: one row per tracked product (English and Chinese name), one column per store, with the cheapest store highlighted. Products are grouped under Meat (including seafood), Vegetables and Other
+- **Reorder**: drag a row by the ⠿ handle on its left; rows move within their own group and the order is saved
+- **Click a product** to see every item (store × brand/size) ranked cheapest first, and a collapsible price history chart (each store's average unit price at each price check)
+- **Track a new product**: type its name in English or Chinese and click Track. Claude then looks up that product on each store's official site in the background, filling in its English and Chinese names, the unit to compare by, and the prices. The row shows "Looking up prices…" and updates by itself when done
+- **Look up prices now**: re-runs the lookup for one product
+- **Stop tracking** (the crossed-out eye at the end of a row, or the button in a product's details): hides a product from the list but keeps its price history. Track the same name again to bring it back with its history
+- **General vs specific names**: a general name (`Pasta`, `Chicken Legs`) gets several common types at each store, each labeled with its brand, type and size; a specific name (`Rigatoni`, `Boneless Skinless Chicken Thighs`) gets only that type
+
+## How prices get updated
+
+- **When you track a product**: a lookup for that one product, started from the dashboard.
+- **Every Friday at 8:00 AM (Eastern)**: a scheduled task in the Claude desktop app refreshes every tracked product. It runs while the app is open; if the app is closed at that time, it runs the next time the app opens. Manage it under "Scheduled" in the app's sidebar.
+
+Both follow the rules in [pricewatch/LOOKUP.md](pricewatch/LOOKUP.md): official store sites only, no frozen meat, no organic unless it is the only option, and so on.
+
+The dashboard's lookup runs Claude Code on this Mac, which must be signed in once. In a terminal, run Claude Code's sign-in, then follow the browser prompt:
 
 ```bash
-python3 -m pricewatch add Eggs --zh 鸡蛋 --unit egg --target 0.25   # 新商品，按"每个蛋"比价
-python3 -m pricewatch record 1 costco 7.49 --qty 24                 # 商品 #1 在 Costco：$7.49 一盒 24 个
-python3 -m pricewatch record 1 hmart 3.49 --qty 12 --note sale
-python3 -m pricewatch compare                                       # 各超市单价对比
-python3 -m pricewatch link 1 target https://www.target.com/p/... --qty 12   # 关联页面，供自动抓价
-python3 -m pricewatch check                                         # 自动抓取所有关联了链接的价格
-python3 -m pricewatch remove 1
+"$(ls -d ~/Library/Application\ Support/Claude/claude-code/*/*/claude.app/Contents/MacOS/claude | tail -1)" auth login
 ```
 
-超市代号：`shoprite` `hmart` `costco` `ranch99` `target` `walmart`
+## Command line
 
-## 自动抓价的限制
+```bash
+python3 -m pricewatch add Eggs --zh "<Chinese name>" --unit egg --target 0.25   # new product, compared per egg
+python3 -m pricewatch set 9 --name Bacon --zh "<Chinese name>" --unit lb        # change names or compare unit
+python3 -m pricewatch record 1 costco 7.49 --qty 24 --variant "Kirkland Large 24ct"   # $7.49 for 24 at Costco
+python3 -m pricewatch compare                                                   # unit prices across stores
+python3 -m pricewatch remove 1                                                  # delete a product and its history
+```
 
-`check` 会读取商品页面上公开的结构化价格数据（schema.org JSON-LD / meta 标签）。实际情况：
-
-- Walmart、ShopRite 会拦截脚本访问（返回验证页或 403）。
-- Target 的价格是浏览器里用 JS 渲染出来的，页面源码里没有。
-
-所以大部分价格目前需要**手动记录**，拿到小票后在看板上批量录入最实际。
+Store codes: `shoprite` `hmart` `costco` `ranch99` `target` `walmart`

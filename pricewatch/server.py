@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from . import STORES, db
+from . import STORES, db, lookup
 from .cli import record_and_alert
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -34,7 +34,10 @@ class Handler(BaseHTTPRequestHandler):
         conn = db.connect()
         try:
             if path == "/api/products":
-                return self._json({"stores": STORES, "products": db.overview(conn)})
+                products = db.overview(conn)
+                for p in products:
+                    p["lookup"] = lookup.status(p["id"])
+                return self._json({"stores": STORES, "products": products})
             if path.startswith("/api/history/"):
                 return self._json(db.history(conn, int(path.rsplit("/", 1)[1])))
         finally:
@@ -72,10 +75,17 @@ class Handler(BaseHTTPRequestHandler):
                 name = (data.get("name") or "").strip()
                 if not name:
                     return self._json({"error": "Enter a product name"}, 400)
+                # Same name as a product already in the database: resume it (with its history) instead of duplicating.
+                existing = db.find_product(conn, name)
+                if existing:
+                    if not existing["tracked"]:
+                        db.set_tracked(conn, existing["id"], True)
+                    return self._json({"id": existing["id"], "resumed": not existing["tracked"], "existing": bool(existing["tracked"])})
                 unit = (data.get("unit") or "").strip() or "unit"
                 pid = db.add_product(
-                    conn, name, unit, (data.get("name_zh") or "").strip() or None, _num(data.get("target_price"))
+                    conn, tidy_name(name), unit, (data.get("name_zh") or "").strip() or None, _num(data.get("target_price"))
                 )
+                lookup.start(pid)  # Claude fills in the Chinese name, compare unit and prices
                 return self._json({"id": pid})
             if path == "/api/prices":
                 pid, store, price = int(data["product_id"]), data.get("store"), _num(data.get("price"))
@@ -87,14 +97,37 @@ class Handler(BaseHTTPRequestHandler):
                     variant=(data.get("variant") or "").strip(),
                 )
                 return self._json({"alerts": alerts})
-            if path.startswith("/api/products/") and path.endswith("/delete"):
-                db.remove_product(conn, int(path.split("/")[3]))
+            if path == "/api/order":
+                db.set_order(conn, [int(i) for i in data["ids"]])
+                return self._json({"ok": True})
+            if path.startswith("/api/products/") and path.endswith("/lookup"):
+                pid = int(path.split("/")[3])
+                if not db.get_product(conn, pid):
+                    return self._json({"error": "No such product"}, 400)
+                lookup.start(pid)
+                return self._json({"ok": True})
+            if path.startswith("/api/products/") and path.endswith("/untrack"):
+                db.set_tracked(conn, int(path.split("/")[3]), False)
                 return self._json({"ok": True})
             return self._json({"error": "not found"}, 404)
         except (ValueError, KeyError) as e:
             return self._json({"error": str(e)}, 400)
         finally:
             conn.close()
+
+
+SMALL_WORDS = {"a", "an", "and", "de", "in", "of", "or", "the", "with"}
+
+
+def tidy_name(name):
+    """Capitalize an English name typed in lowercase ("half and half" -> "Half and Half").
+
+    Names with any capital letter, or in Chinese, are kept exactly as typed.
+    """
+    if name != name.lower() or not name.isascii():
+        return name
+    words = name.split()
+    return " ".join(w if i and w in SMALL_WORDS else w[:1].upper() + w[1:] for i, w in enumerate(words))
 
 
 def _num(v):

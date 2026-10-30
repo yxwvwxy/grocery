@@ -39,30 +39,73 @@
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   tr.row { cursor: pointer; }
   tr.row:hover td, tr.row.sel td { background: var(--chip); }
-  #matrix td:nth-child(-n+2) { white-space: nowrap; }
-  td.cell { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* The overview matrix always fits the card: fixed layout, store columns share the width,
+     long brand names wrap (clamped to two lines) instead of widening the table. */
+  #matrix { table-layout: fixed; }
+  #matrix th, #matrix td { padding: 10px 6px; }
+  #matrix th.prod { width: 19%; }
+  #matrix th { white-space: normal; }
+  #matrix .per { display: block; font-size: 12px; color: var(--muted); }
+  td.cell { text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  td.cell .save { display: block; font-size: 11px; color: var(--down); font-weight: 600; }
+  /* Phones: each product becomes a card with one line per store. */
+  @media (max-width: 700px) {
+    #matrix, #matrix tbody, #matrix tr, #matrix td { display: block; width: 100%; }
+    #matrix thead { display: none; }
+    #matrix tr.row { border-bottom: 1px solid var(--line); padding: 8px 0; }
+    #matrix td { border: 0; padding: 6px 8px; }
+    #matrix td.cell { display: grid; grid-template-columns: 6.5em 1fr; column-gap: 12px; text-align: right; }
+    #matrix td.cell::before { white-space: nowrap; }
+    #matrix td.cell::before { content: attr(data-store); text-align: left; color: var(--text); grid-row: span 4; }
+    #matrix td.cell.none { display: none; }
+  }
   td.cell .u { font-weight: 600; }
   td.cell .p { display: block; font-size: 12px; color: var(--muted); }
   td.cell.best { background: var(--best); }
   tr.row:hover td.cell.best, tr.row.sel td.cell.best { background: var(--best); }
   .tag { font-size: 11px; color: #fff; background: var(--down); border-radius: 6px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
   .store-icon { width: 16px; height: 16px; border-radius: 4px; margin-right: 6px; vertical-align: -3px; object-fit: cover; }
-  .thumb { display: inline-block; width: 56px; height: 56px; border-radius: 8px; object-fit: contain; background: var(--chip); border: 1px solid var(--line); }
-  .thumb.empty { background: transparent; }
+  table.items .unit, table.items .pack, table.items .store { white-space: nowrap; }
+  table.items .pack-sm { display: none; font-size: 12px; }
+  @media (max-width: 700px) {
+    table.items th, table.items td { padding: 8px 4px; font-size: 13px; }
+    table.items .rank, table.items .pack { display: none; }
+    table.items .pack-sm { display: block; }
+  }
   .down { color: var(--down); } .up { color: var(--up); }
-  .bars { display: grid; grid-template-columns: max-content 1fr max-content; gap: 6px 10px; align-items: center; margin: 12px 0 4px; }
-  .bars .track { height: 14px; }
-  .bars .bar { height: 14px; border-radius: 0 4px 4px 0; min-width: 2px; }
-  .bars .val { font-variant-numeric: tabular-nums; font-size: 13px; }
   .chartbox { position: relative; height: 260px; margin: 16px 0 8px; }
   form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
   input, select, button { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
     background: var(--bg); color: var(--text); min-width: 0; }
   button { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer; }
   button.ghost { background: transparent; color: var(--muted); border-color: var(--line); }
+  .add-form { grid-template-columns: 1fr auto; }
+  #matrix tr.group td { font-size: 13px; font-weight: 600; color: var(--text); background: var(--bg);
+    padding: 8px 8px 6px; border-bottom: 1px solid var(--line); }
+  #matrix th.drag, #matrix td.drag { width: 28px; padding-left: 0; padding-right: 0; text-align: center; }
+  .handle { display: inline-block; padding: 6px 4px; color: var(--muted); cursor: grab; touch-action: none; user-select: none; font-size: 16px; line-height: 1; }
+  .handle:hover { color: var(--text); }
+  tr.dragging td { background: var(--chip); opacity: .85; }
+  tr.dragging .handle { cursor: grabbing; }
+  /* Phones: handle to the left of the product name, stop-tracking icon to its right. */
+  @media (max-width: 700px) {
+    #matrix tr.row { position: relative; }
+    #matrix td.drag { position: absolute; left: 0; top: 10px; width: auto; padding: 0; }
+    #matrix td.drag + td { padding-left: 30px; padding-right: 40px; }
+  }
+  #matrix th.act { width: 40px; }
+  #matrix td.act { text-align: right; }
+  button.untrack { display: inline-flex; padding: 6px; background: transparent; color: var(--muted); border-color: transparent; }
+  button.untrack:hover { color: var(--up); border-color: var(--up); }
+  @media (max-width: 700px) { #matrix td.act { position: absolute; right: 0; top: 8px; width: auto; padding: 0; } }
+  .looking { color: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  button:disabled { opacity: .5; cursor: default; }
   .section-label { font-size: 13px; color: var(--muted); margin: 16px 0 6px; }
   .empty { padding: 32px; text-align: center; color: var(--muted); }
   details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 12px; }
+  details.history { margin-top: 16px; border-top: 1px solid var(--line); }
+  details.history summary { font-size: 14px; color: var(--text); padding: 12px 0 4px; }
   #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg);
     padding: 10px 16px; border-radius: 10px; display: none; max-width: calc(100% - 32px); }
 </style>
@@ -75,36 +118,36 @@
     页面版本 / Build: {{BUILD}}</p>
 
   <div class="card">
-    <form id="search-form" style="display:flex;gap:8px">
-      <input id="search" type="search" placeholder="Search products… e.g. egg" style="flex:1">
-      <button type="submit">Search</button>
+    <h2 style="margin-bottom:10px">Track a new product</h2>
+    <form id="add-form" class="add-form">
+      <input name="name" placeholder="Product name in English or Chinese, e.g. Milk / 牛奶" required>
+      <button type="submit">Track</button>
     </form>
   </div>
 
-  <div class="card" id="results-card" style="display:none">
-    <div id="results"></div>
-    <div id="no-match" class="empty" style="display:none">No products match your search.</div>
-  </div>
-
   <div class="card" id="matrix-card">
-    <div class="tablewrap"><table id="matrix"></table></div>
+    <table id="matrix"></table>
     <div id="empty" class="empty" style="display:none">No products yet.</div>
   </div>
 
   <div class="card" id="detail" style="display:none">
     <h2 id="d-title"></h2>
     <div class="muted" id="d-meta"></div>
-    <div class="section-label">Latest unit price by store</div>
-    <div class="bars" id="bars"></div>
-    <div class="section-label">Unit price history</div>
-    <div class="chartbox"><canvas id="chart" aria-label="Unit price history by store"></canvas></div>
-    <p style="margin:12px 0 0"><button type="button" class="ghost" id="delete-btn">Delete product</button></p>
+    <div class="section-label">All items, cheapest first</div>
+    <div id="d-items"></div>
+    <details class="history">
+      <summary>Price history <span class="muted">— average unit price per store, at each price check</span></summary>
+      <div class="chartbox"><canvas id="chart" aria-label="Unit price history by store"></canvas></div>
+    </details>
+    <p style="margin:12px 0 0"><button type="button" class="ghost" id="lookup-btn">Look up prices now</button>
+      <button type="button" class="ghost" id="untrack-btn">Stop tracking</button>
+      <span class="muted" style="font-size:13px;margin-left:8px">Price history is kept. Track the same name again to bring it back.</span></p>
   </div>
 </main>
 <div id="toast"></div>
 
 <script>
-let state = { stores: {}, products: [], selected: null, query: "" };
+let state = { stores: {}, products: [], selected: null };
 let chart;
 const $ = (s) => document.querySelector(s);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -114,6 +157,7 @@ const money = (v) => v == null ? "–" : "$" + Number(v).toFixed(2);
 const unitMoney = (v) => v == null ? "–" : "$" + Number(v).toFixed(2);
 const qtyText = (q) => q === 1 ? "" : ` / ${+q.toFixed(3)}`;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const perUnit = (p) => p.unit && p.unit !== "unit" ? "/" + esc(p.unit) : "";
 const nameHtml = (p) => `${esc(p.name)}${p.name_zh ? `<span class="zh">${esc(p.name_zh)}</span>` : ""}`;
 
 function toast(msg) {
@@ -130,24 +174,27 @@ async function api(path, body) {
 
 async function load() {
   const data = await api("/api/products");
+  const wasRunning = new Set(state.products.filter((p) => p.lookup?.state === "running").map((p) => p.id));
   state.stores = data.stores; state.products = data.products;
   render();
   if (state.selected) showDetail(state.selected);
+  for (const p of state.products) {
+    if (wasRunning.has(p.id) && p.lookup?.state !== "running") toast(`${p.name}: ${p.lookup.message}`);
+  }
+  // While Claude is looking up prices, refresh every few seconds so results appear on their own.
+  clearTimeout(load.timer);
+  if (state.products.some((p) => p.lookup?.state === "running")) load.timer = setTimeout(load, 5000);
 }
 
-function matchedProducts() {
-  const q = state.query.trim().toLowerCase();
-  if (!q) return null;
-  return state.products.filter((p) => p.name.toLowerCase().includes(q) || (p.name_zh || "").toLowerCase().includes(q));
-}
+// "Looking up prices…" / a failure message for a product whose lookup is running or failed.
+const lookupNote = (p) => {
+  const j = p.lookup;
+  if (!j || j.state === "done") return "";
+  return j.state === "running" ? '<span class="looking">Looking up prices…</span>' : `<span class="up">${esc(j.message)}</span>`;
+};
 
-// Search is a standalone lookup: type a keyword, see every matching product ranked
-// cheapest-first across stores. It never requires or opens the add/edit form.
 function render() {
-  const matches = matchedProducts();
-  $("#results-card").style.display = matches ? "block" : "none";
-  $("#matrix-card").style.display = matches ? "none" : "block";
-  if (matches) renderResults(matches); else renderMatrix(state.products);
+  renderMatrix(state.products);
 }
 
 // Notes are recorded as "<brand/variant>, <date>查价" — show just the brand/variant part.
@@ -159,26 +206,20 @@ const itemLabel = (l) => {
   return note ? esc(note.replace(/[,，]\s*\d{1,2}\/\d{1,2}查价\s*$/, "")) : '<span class="muted">—</span>';
 };
 
-function renderResults(ps) {
-  $("#no-match").style.display = ps.length ? "none" : "block";
-  $("#results").innerHTML = ps.map((p) => {
-    const priced = p.listings.filter((l) => l.unit_price != null); // already ranked cheapest-first by the server
-    const rows = priced.length
-      ? priced.map((l, i) => `<tr><td>${i + 1}</td>
-          <td>${l.image_url ? `<img src="${esc(l.image_url)}" alt="" class="thumb">` : '<span class="thumb empty"></span>'}</td>
-          <td>${storeBadge(l.store)}${esc(state.stores[l.store])}</td>
-          <td>${itemLabel(l)}</td>
-          <td class="num"><span class="u">${unitMoney(l.unit_price)}</span>/${esc(p.unit)}${i === 0 ? ' <span class="tag">Cheapest</span>' : ""}</td>
-          <td class="num muted">${money(l.price)}${qtyText(l.qty)}</td></tr>`).join("")
-      : `<tr><td colspan="6" class="muted">No prices logged yet</td></tr>`;
-    return `<div style="margin-bottom:20px">
-      <h2 style="margin-bottom:8px" class="row" data-id="${p.id}">${nameHtml(p)}</h2>
-      <div class="muted" style="margin:-6px 0 8px">per ${esc(p.unit)}</div>
-      <div class="tablewrap"><table><thead><tr><th>#</th><th></th><th>Store</th><th>Item</th><th class="num">Unit price</th><th class="num">Pack</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>
-    </div>`;
-  }).join("");
-  $("#results").querySelectorAll("h2.row").forEach((h) => h.onclick = () => toggleDetail(Number(h.dataset.id)));
+// Every item (store × brand/size) of one product, ranked cheapest-first by unit price.
+function itemsTable(p) {
+  const priced = p.listings.filter((l) => l.unit_price != null); // already ranked cheapest-first by the server
+  const rows = priced.length
+    ? priced.map((l, i) => `<tr><td class="rank">${i + 1}</td>
+        <td class="store">${storeBadge(l.store)}${esc(state.stores[l.store])}</td>
+        <td>${itemLabel(l)}</td>
+        <td class="num unit"><span class="u">${unitMoney(l.unit_price)}</span>${perUnit(p)}${i === 0 ? ' <span class="tag">Cheapest</span>' : ""}
+          <span class="pack-sm muted">${money(l.price)}${qtyText(l.qty)}</span></td>
+        <td class="num pack muted">${money(l.price)}${qtyText(l.qty)}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="muted">No prices logged yet</td></tr>`;
+  return `<table class="items"><thead><tr><th class="rank">#</th><th class="store">Store</th><th>Item</th>
+    <th class="num unit">Unit price</th><th class="num pack">Pack</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
 }
 
 // Rows are products, columns are the stores that have at least one price.
@@ -186,35 +227,43 @@ function renderMatrix(ps) {
   $("#empty").style.display = ps.length ? "none" : "block";
   if (!ps.length) { $("#matrix").innerHTML = ""; return; }
   const used = Object.keys(state.stores).filter((k) => ps.some((p) => p.listings.some((l) => l.store === k && l.unit_price != null)));
-  const head = `<tr><th>Product</th><th>Unit</th>${used.map((k) =>
-    `<th class="num">${storeBadge(k)}${esc(state.stores[k])}</th>`).join("")}<th>Cheapest</th></tr>`;
+  const head = `<tr><th class="drag"></th><th class="prod">Product</th>${used.map((k) =>
+    `<th class="num">${storeBadge(k)}${esc(state.stores[k])}</th>`).join("")}<th class="act"></th></tr>`;
+  // Products arrive grouped by category (meat, vegetables, other); a subheading row starts each group.
+  let lastCat = null;
   const rows = ps.map((p) => {
+    const cat = CATEGORY_LABELS[p.category] ? p.category : "other";
+    const heading = cat === lastCat ? "" : `<tr class="group"><td colspan="${used.length + 3}">${CATEGORY_LABELS[cat]}</td></tr>`;
+    lastCat = cat;
     // listings are pre-sorted cheapest-first; keep only each store's cheapest variant for this overview row
     const by = {};
     for (const l of p.listings) if (!(l.store in by)) by[l.store] = l;
     const best = p.listings.find((l) => l.store === p.best_store);
     const hit = best && p.target_price != null && best.unit_price <= p.target_price ? '<span class="tag">Target hit</span>' : "";
+    // How much the cheapest store saves vs the priciest one, shown inside the cheapest cell.
+    const priced = p.listings.filter((l) => l.unit_price != null);
+    const save = best && priced.length > 1 && priced[priced.length - 1].unit_price > best.unit_price
+      ? `saves ${Math.round((1 - best.unit_price / priced[priced.length - 1].unit_price) * 100)}%` : "";
     const cells = used.map((k) => {
       const l = by[k];
-      if (!l || l.unit_price == null) return '<td class="cell muted">–</td>';
+      if (!l || l.unit_price == null) return '<td class="cell none muted">–</td>';
       let trend = "";
       if (l.previous_unit_price != null && Math.abs(l.unit_price - l.previous_unit_price) > 1e-9)
         trend = l.unit_price < l.previous_unit_price ? ' <span class="down" title="Lower than last time">▼</span>' : ' <span class="up" title="Higher than last time">▲</span>';
-      return `<td class="cell ${k === p.best_store ? "best" : ""}" title="${esc(l.note || "")}"><span class="u">${unitMoney(l.unit_price)}</span>${trend}
-        <span class="p">${money(l.price)}${qtyText(l.qty)}</span>
-        <span class="p item">${itemLabel(l)}</span></td>`;
+      const isBest = k === p.best_store;
+      return `<td class="cell ${isBest ? "best" : ""}" data-store="${esc(state.stores[k])}" title="${esc(l.variant || l.note || "")}"><span class="u">${unitMoney(l.unit_price)}</span>${trend}
+        ${isBest && save ? `<span class="save">Cheapest · ${save}</span>` : isBest ? '<span class="save">Cheapest</span>' : ""}
+        <span class="p">${money(l.price)}${qtyText(l.qty)}</span></td>`;
     }).join("");
-    let cheapest = '<span class="muted">No prices yet</span>';
-    if (best) {
-      const others = p.listings.filter((l) => l.unit_price != null && l.store !== best.store);
-      const save = others.length ? ` <span class="muted">saves ${Math.round((1 - best.unit_price / others[others.length - 1].unit_price) * 100)}% vs priciest</span>` : "";
-      cheapest = `${storeBadge(best.store)}${esc(state.stores[best.store])}${save}`;
-    }
-    return `<tr class="row ${state.selected === p.id ? "sel" : ""}" data-id="${p.id}">
-      <td>${nameHtml(p)}${hit}</td><td class="muted">per ${esc(p.unit)}</td>${cells}<td>${cheapest}</td></tr>`;
+    return `${heading}<tr class="row ${state.selected === p.id ? "sel" : ""}" data-id="${p.id}" data-cat="${cat}">
+      <td class="drag"><span class="handle" title="Drag to reorder" aria-label="Drag to reorder">⠿</span></td>
+      <td>${nameHtml(p)}${hit}<span class="per">${[perUnit(p) && "per " + esc(p.unit), lookupNote(p) || (best ? "" : "no prices yet")].filter(Boolean).join(" · ")}</span></td>${cells}
+      <td class="act"><button type="button" class="untrack" data-id="${p.id}" title="Stop tracking ${esc(p.name)}" aria-label="Stop tracking ${esc(p.name)}">${EYE_OFF}</button></td></tr>`;
   }).join("");
   $("#matrix").innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
   $("#matrix").querySelectorAll("tr.row").forEach((r) => r.onclick = () => toggleDetail(Number(r.dataset.id)));
+  $("#matrix").querySelectorAll("button.untrack").forEach((b) => b.onclick = (e) => { e.stopPropagation(); untrack(Number(b.dataset.id)); });
+  enableRowDrag();
 }
 
 function toggleDetail(id) {
@@ -228,29 +277,42 @@ async function showDetail(id) {
   state.selected = id; render();
   $("#detail").style.display = "block";
   $("#d-title").innerHTML = nameHtml(p);
-  $("#d-meta").textContent = `Compared per ${p.unit}` + (p.target_price != null ? ` · target ${unitMoney(p.target_price)}/${p.unit}` : "");
+  $("#d-meta").innerHTML = [perUnit(p) && `Compared per ${esc(p.unit)}`,
+    p.target_price != null ? `Target ${unitMoney(p.target_price)}${perUnit(p)}` : "", lookupNote(p)].filter(Boolean).join(" · ");
+  $("#lookup-btn").disabled = p.lookup?.state === "running";
 
-  const priced = p.listings.filter((l) => l.unit_price != null);
-  const max = Math.max(...priced.map((l) => l.unit_price), 0);
-  $("#bars").innerHTML = priced.length ? priced.map((l) => `
-    <div>${storeBadge(l.store)}${esc(state.stores[l.store])}</div>
-    <div class="track"><div class="bar" style="width:${(l.unit_price / max * 100).toFixed(1)}%;background:${storeColor(l.store)}"
-      title="${esc(state.stores[l.store])}: ${unitMoney(l.unit_price)}/${esc(p.unit)} (${money(l.price)}${qtyText(l.qty)})"></div></div>
-    <div class="val">${unitMoney(l.unit_price)}/${esc(p.unit)}${l.store === p.best_store ? ' <span class="tag">Cheapest</span>' : ""}</div>`).join("")
-    : '<div class="muted" style="grid-column:1/-1">No prices yet.</div>';
+  $("#d-items").innerHTML = itemsTable(p);
 
   const hist = await api("/api/history/" + id);
 
   const muted = css("--muted"), line = css("--line");
-  const when = (h) => h.recorded_at.slice(5, 16).replace("T", " ");
+  // One line per store: at each capture (a batch of prices logged together), the average
+  // unit price of all that store's items, using each item's latest known price at that time.
+  const captures = [];
+  for (const h of hist) {
+    const t = new Date(h.recorded_at).getTime();
+    const last = captures[captures.length - 1];
+    if (last && t - last.end <= 10 * 60 * 1000) { last.rows.push(h); last.end = t; }
+    else captures.push({ label: h.recorded_at.slice(5, 16).replace("T", " "), end: t, rows: [h] });
+  }
+  const latest = new Map(); // listing_id -> { store, unit_price }
+  const points = {};        // store -> one {y, n} (or null) per capture
   const stores = Object.keys(state.stores).filter((k) => hist.some((h) => h.store === k));
+  for (const k of stores) points[k] = [];
+  for (const c of captures) {
+    for (const h of c.rows) latest.set(h.listing_id, h);
+    for (const k of stores) {
+      const units = [...latest.values()].filter((h) => h.store === k).map((h) => h.unit_price);
+      points[k].push(units.length ? { y: units.reduce((a, b) => a + b, 0) / units.length, n: units.length } : null);
+    }
+  }
+  const labels = captures.map((c) => c.label);
   const datasets = stores.map((k) => ({
     label: state.stores[k],
-    data: hist.filter((h) => h.store === k).map((h) => ({ x: when(h), y: h.unit_price, h })),
+    data: points[k].map((pt, i) => pt ? { x: labels[i], y: pt.y, n: pt.n } : null),
     borderColor: storeColor(k), backgroundColor: storeColor(k), borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, tension: 0, spanGaps: true,
   }));
   if (p.target_price != null) datasets.push({ label: "Target", data: [], borderColor: muted, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 });
-  const labels = [...new Set(hist.map(when))];
   if (p.target_price != null) datasets[datasets.length - 1].data = labels.map((x) => ({ x, y: p.target_price }));
   if (chart) chart.destroy();
   chart = new Chart($("#chart"), {
@@ -263,8 +325,9 @@ async function showDetail(id) {
         legend: { display: datasets.length > 1, labels: { color: muted, boxWidth: 12, boxHeight: 2 } },
         tooltip: { callbacks: {
           title: (items) => `${p.name}${p.name_zh ? " " + p.name_zh : ""} — ${items[0]?.label ?? ""}`,
-          label: (c) => `${c.dataset.label}: ${unitMoney(c.parsed.y)}/${p.unit}`,
-          afterLabel: (c) => { const h = c.raw.h; return h ? [`${money(h.price)}${qtyText(h.qty)}`, h.note].filter(Boolean).join(" · ") : ""; },
+          label: (c) => c.raw && c.raw.n
+            ? `${c.dataset.label}: avg ${unitMoney(c.parsed.y)}${perUnit(p)} (${c.raw.n} item${c.raw.n > 1 ? "s" : ""})`
+            : `${c.dataset.label}: ${unitMoney(c.parsed.y)}${perUnit(p)}`,
         } },
       },
       scales: {
@@ -275,14 +338,87 @@ async function showDetail(id) {
   });
 }
 
-$("#search").oninput = (e) => { state.query = e.target.value; render(); };
-$("#search-form").onsubmit = (e) => { e.preventDefault(); state.query = $("#search").value; render(); };
-
-$("#delete-btn").onclick = async () => {
-  if (!confirm("Delete this product and all of its prices?")) return;
-  await api(`/api/products/${state.selected}/delete`, {});
-  state.selected = null; $("#detail").style.display = "none"; load();
+// Adding a product that is already tracked (same English or Chinese name) just opens it.
+$("#add-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  const same = (a, b) => a && b && a.trim().toLowerCase() === b.trim().toLowerCase();
+  const existing = state.products.find((p) => same(p.name, f.name) || same(p.name_zh, f.name));
+  if (existing) { e.target.reset(); toast(`Already tracking ${existing.name}`); showDetail(existing.id); return; }
+  // The server also matches products you stopped tracking, and resumes them with their history.
+  try {
+    const r = await api("/api/products", f);
+    e.target.reset(); state.selected = r.id; await load();
+    const p = state.products.find((x) => x.id === r.id);
+    toast(r.resumed ? `Tracking ${p ? p.name : f.name} again — its price history is back` : `Now tracking ${p ? p.name : f.name}`);
+  } catch (err) { toast(err.message); }
 };
+
+$("#lookup-btn").onclick = async () => {
+  try { await api(`/api/products/${state.selected}/lookup`, {}); toast("Looking up prices…"); load(); }
+  catch (err) { toast(err.message); }
+};
+
+const CATEGORY_LABELS = { meat: "Meat", vegetable: "Vegetables", other: "Other" };
+
+// "Stop watching" icon for the per-row Stop tracking button (hides the product; nothing is deleted).
+const EYE_OFF = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8
+  a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+  <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+// Drag a row by its handle to move it; the new order is saved when the row is dropped.
+// Pointer events (not HTML drag-and-drop) so it works with a mouse and on touch screens.
+function enableRowDrag() {
+  const tbody = $("#matrix tbody");
+  tbody.querySelectorAll(".handle").forEach((h) => {
+    h.onclick = (e) => e.stopPropagation();
+    h.onpointerdown = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const row = h.closest("tr");
+      const before = [...tbody.querySelectorAll("tr.row")].map((r) => Number(r.dataset.id));
+      row.classList.add("dragging");
+      // Listen on the window: moving the row in the DOM releases pointer capture on the handle.
+      const moveTo = (ev) => {
+        const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest("#matrix tbody tr.row");
+        if (!over || over === row || over.dataset.cat !== row.dataset.cat) return; // stay within the category
+        const r = over.getBoundingClientRect();
+        tbody.insertBefore(row, ev.clientY < r.top + r.height / 2 ? over : over.nextSibling);
+      };
+      const drop = async (ev) => {
+        window.removeEventListener("pointermove", moveTo);
+        window.removeEventListener("pointerup", drop);
+        window.removeEventListener("pointercancel", drop);
+        if (ev.type === "pointerup") moveTo(ev); // a quick drag may skip move events; drop where released
+        row.classList.remove("dragging");
+        // The release also fires a click; swallow it so dropping a row doesn't open its details.
+        const swallow = (c) => c.stopPropagation();
+        window.addEventListener("click", swallow, { capture: true, once: true });
+        setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 0);
+        const ids = [...tbody.querySelectorAll("tr.row")].map((r) => Number(r.dataset.id));
+        if (ids.join() === before.join()) return;
+        state.products.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+        try { await api("/api/order", { ids }); } catch (err) { toast(err.message); load(); }
+      };
+      window.addEventListener("pointermove", moveTo);
+      window.addEventListener("pointerup", drop);
+      window.addEventListener("pointercancel", drop);
+    };
+  });
+}
+
+// Hides the product from the list; its price history stays and comes back if it is tracked again.
+async function untrack(id) {
+  const p = state.products.find((x) => x.id === id);
+  if (!confirm(`Stop tracking ${p ? p.name : "this product"}? Its price history is kept.`)) return;
+  try {
+    await api(`/api/products/${id}/untrack`, {});
+    if (state.selected === id) { state.selected = null; $("#detail").style.display = "none"; }
+    toast(`Stopped tracking ${p ? p.name : "product"}`); load();
+  } catch (err) { toast(err.message); }
+}
+
+$("#untrack-btn").onclick = () => untrack(state.selected);
 
 load();
 </script>

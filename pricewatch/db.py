@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS products (
     name_zh      TEXT,                  -- Chinese name
     unit         TEXT NOT NULL,         -- what one unit is: 'lb', 'egg', 'oz', 'pack' ...
     target_price REAL,                  -- alert when a store's unit price is at or below this
+    tracked      INTEGER NOT NULL DEFAULT 1, -- 0 = hidden from the dashboard; its price history is kept
+    sort_order   INTEGER NOT NULL DEFAULT 0, -- position in the dashboard list, set by dragging rows
+    category     TEXT NOT NULL DEFAULT 'other', -- 'meat', 'vegetable' or 'other'; groups the dashboard list
     created_at   TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS listings (
@@ -54,6 +57,19 @@ def connect(path=DB_PATH):
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    product_cols = {r["name"] for r in conn.execute("PRAGMA table_info(products)")}
+    if "tracked" not in product_cols:
+        conn.execute("ALTER TABLE products ADD COLUMN tracked INTEGER NOT NULL DEFAULT 1")
+        conn.commit()
+    if "category" not in product_cols:
+        conn.execute("ALTER TABLE products ADD COLUMN category TEXT NOT NULL DEFAULT 'other'")
+        conn.commit()
+    if "sort_order" not in product_cols:
+        # Start from the alphabetical order the list used before rows could be dragged.
+        conn.execute("ALTER TABLE products ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
+        ids = [r["id"] for r in conn.execute("SELECT id FROM products ORDER BY name COLLATE NOCASE")]
+        conn.executemany("UPDATE products SET sort_order = ? WHERE id = ?", list(enumerate(ids)))
+        conn.commit()
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(listings)")}
     if "image_url" not in cols:
         conn.execute("ALTER TABLE listings ADD COLUMN image_url TEXT")
@@ -84,8 +100,10 @@ def connect(path=DB_PATH):
 
 
 def add_product(conn, name, unit, name_zh=None, target_price=None):
+    # New products go to the bottom of the list.
     cur = conn.execute(
-        "INSERT INTO products (name, name_zh, unit, target_price, created_at) VALUES (?, ?, ?, ?, ?)",
+        """INSERT INTO products (name, name_zh, unit, target_price, created_at, sort_order)
+           VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM products))""",
         (name, name_zh, unit, target_price, now()),
     )
     conn.commit()
@@ -94,6 +112,37 @@ def add_product(conn, name, unit, name_zh=None, target_price=None):
 
 def remove_product(conn, product_id):
     conn.execute("DELETE FROM products WHERE id = ?", (product_id,))
+    conn.commit()
+
+
+def set_order(conn, product_ids):
+    """Save the dashboard order: product_ids from top to bottom."""
+    conn.executemany("UPDATE products SET sort_order = ? WHERE id = ?", list(enumerate(product_ids)))
+    conn.commit()
+
+
+def set_tracked(conn, product_id, tracked):
+    """Stop or resume tracking a product. Its listings and price history are never touched."""
+    conn.execute("UPDATE products SET tracked = ? WHERE id = ?", (1 if tracked else 0, product_id))
+    conn.commit()
+
+
+def find_product(conn, name):
+    """A product (tracked or not) whose English or Chinese name matches, ignoring case."""
+    return conn.execute(
+        "SELECT * FROM products WHERE lower(name) = lower(?) OR lower(name_zh) = lower(?) ORDER BY tracked DESC, id",
+        (name, name),
+    ).fetchone()
+
+
+CATEGORIES = ("meat", "vegetable", "other")  # dashboard group order
+
+
+def update_product(conn, product_id, name=None, name_zh=None, unit=None, category=None):
+    """Change whichever of the names / compare unit / category are given."""
+    for col, val in (("name", name), ("name_zh", name_zh), ("unit", unit), ("category", category)):
+        if val:
+            conn.execute("UPDATE products SET {} = ? WHERE id = ?".format(col), (val, product_id))
     conn.commit()
 
 
@@ -154,12 +203,13 @@ def listings_with_url(conn):
 
 
 def overview(conn):
-    """Every product with its stores, each store's latest/previous/lowest unit price.
+    """Every tracked product with its stores, each store's latest/previous/lowest unit price.
 
     A product's listings are sorted cheapest first by latest unit price;
     stores with no price yet go last.
     """
-    products = [dict(r) for r in conn.execute("SELECT * FROM products ORDER BY name COLLATE NOCASE")]
+    products = [dict(r) for r in conn.execute("""SELECT * FROM products WHERE tracked
+           ORDER BY CASE category WHEN 'meat' THEN 0 WHEN 'vegetable' THEN 1 ELSE 2 END, sort_order, id""")]
     history_by_listing = defaultdict(list)
     for r in conn.execute("SELECT * FROM prices ORDER BY recorded_at, id"):
         history_by_listing[r["listing_id"]].append(r)
@@ -191,7 +241,7 @@ def overview(conn):
 
 def history(conn, product_id):
     rows = conn.execute(
-        """SELECT l.store, pr.price, pr.qty, pr.price / pr.qty AS unit_price, pr.source, pr.note, pr.recorded_at
+        """SELECT l.id AS listing_id, l.store, pr.price, pr.qty, pr.price / pr.qty AS unit_price, pr.source, pr.note, pr.recorded_at
            FROM prices pr JOIN listings l ON l.id = pr.listing_id
            WHERE l.product_id = ? ORDER BY pr.recorded_at, pr.id""",
         (product_id,),

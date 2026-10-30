@@ -1,4 +1,5 @@
 import argparse
+import os
 import subprocess
 import sys
 
@@ -7,7 +8,10 @@ from .extract import FetchError, fetch_price
 
 
 def notify(title, message):
-    """Show a macOS notification; silently skipped elsewhere."""
+    """Show a macOS notification; silently skipped elsewhere, or when PRICEWATCH_QUIET is set
+    (price lookups run by Claude set it, so filling in a new product doesn't pop up alerts)."""
+    if os.environ.get("PRICEWATCH_QUIET"):
+        return
     script = 'display notification {} with title {}'.format(
         _applescript_str(message), _applescript_str(title)
     )
@@ -97,6 +101,13 @@ def cmd_link(conn, args):
     print("已关联 #{} @ {}，`check` 时会自动抓价".format(args.product_id, STORES[args.store]))
 
 
+def cmd_set(conn, args):
+    _product(conn, args.product_id)
+    db.update_product(conn, args.product_id, name=args.name, name_zh=args.zh, unit=args.unit, category=args.category)
+    p = db.get_product(conn, args.product_id)
+    print("已更新 #{}: {}（按 {} 比价，分类 {}）".format(p["id"], display_name(p), p["unit"], p["category"]))
+
+
 def cmd_remove(conn, args):
     db.remove_product(conn, args.product_id)
     print("已删除 #{}".format(args.product_id))
@@ -183,6 +194,14 @@ def main(argv=None):
     k.add_argument("--qty", type=float, default=1, help="这个链接的一包有几个单位")
     k.add_argument("--variant", help="这家店卖的具体品牌/规格")
     k.set_defaults(func=cmd_link)
+
+    st = sub.add_parser("set", help="修改商品的英文名、中文名或比价单位")
+    st.add_argument("product_id", type=int)
+    st.add_argument("--name", help="英文名")
+    st.add_argument("--zh", help="中文名")
+    st.add_argument("--unit", help="比价单位，如 lb、egg、fl oz")
+    st.add_argument("--category", choices=db.CATEGORIES, help="分类：meat 肉类和海鲜、vegetable 蔬菜、other 其他")
+    st.set_defaults(func=cmd_set)
 
     rm = sub.add_parser("remove", help="删除商品及其所有价格")
     rm.add_argument("product_id", type=int)
