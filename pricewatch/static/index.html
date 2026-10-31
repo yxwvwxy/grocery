@@ -42,22 +42,22 @@
   /* The overview matrix always fits the card: fixed layout, store columns share the width,
      long brand names wrap (clamped to two lines) instead of widening the table. */
   #matrix { table-layout: fixed; }
-  #matrix th, #matrix td { padding: 10px 6px; }
-  #matrix th.prod { width: 19%; }
-  #matrix th { white-space: normal; }
+  #matrix > thead > tr > th, #matrix > tbody > tr > td { padding: 10px 6px; }
+  #matrix > thead > tr > th.prod { width: 19%; }
+  #matrix > thead > tr > th { white-space: normal; }
   #matrix .per { display: block; font-size: 12px; color: var(--muted); }
   td.cell { text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   td.cell .save { display: block; font-size: 11px; color: var(--down); font-weight: 600; }
   /* Phones: each product becomes a card with one line per store. */
   @media (max-width: 700px) {
-    #matrix, #matrix tbody, #matrix tr, #matrix td { display: block; width: 100%; }
-    #matrix thead { display: none; }
-    #matrix tr.row { border-bottom: 1px solid var(--line); padding: 8px 0; }
-    #matrix td { border: 0; padding: 6px 8px; }
-    #matrix td.cell { display: grid; grid-template-columns: 6.5em 1fr; column-gap: 12px; text-align: right; }
-    #matrix td.cell::before { white-space: nowrap; }
-    #matrix td.cell::before { content: attr(data-store); text-align: left; color: var(--text); grid-row: span 4; }
-    #matrix td.cell.none { display: none; }
+    #matrix, #matrix > tbody, #matrix > tbody > tr, #matrix > tbody > tr > td { display: block; width: 100%; }
+    #matrix > thead { display: none; }
+    #matrix > tbody > tr.row { border-bottom: 1px solid var(--line); padding: 8px 0; }
+    #matrix > tbody > tr > td { border: 0; padding: 6px 8px; }
+    #matrix > tbody > tr > td.cell { display: grid; grid-template-columns: 6.5em 1fr; column-gap: 12px; text-align: right; }
+    #matrix > tbody > tr > td.cell::before { white-space: nowrap; }
+    #matrix > tbody > tr > td.cell::before { content: attr(data-store); text-align: left; color: var(--text); grid-row: span 4; }
+    #matrix > tbody > tr > td.cell.none { display: none; }
   }
   td.cell .u { font-weight: 600; }
   td.cell .p { display: block; font-size: 12px; color: var(--muted); }
@@ -71,6 +71,8 @@
     table.items th, table.items td { padding: 8px 4px; font-size: 13px; }
     table.items .rank, table.items .pack { display: none; }
     table.items .pack-sm { display: block; }
+    table.items .unit .tag { display: table; margin: 2px 0 0 auto; }
+    #matrix #detail { padding: 12px 10px; }
   }
   .down { color: var(--down); } .up { color: var(--up); }
   .chartbox { position: relative; height: 260px; margin: 16px 0 8px; }
@@ -80,24 +82,31 @@
   button { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer; }
   button.ghost { background: transparent; color: var(--muted); border-color: var(--line); }
   .add-form { grid-template-columns: 1fr auto; }
-  #matrix tr.group td { font-size: 13px; font-weight: 600; color: var(--text); background: var(--bg);
+  #matrix > tbody > tr.detail-row > td { padding: 0 0 14px; border-bottom: 1px solid var(--line); }
+  #matrix > tbody > tr.detail-row #detail { margin: 0; border-top-left-radius: 0; border-top-right-radius: 0; border-color: var(--accent); }
+  #matrix > tbody > tr.group td { font-size: 13px; font-weight: 600; color: var(--text); background: var(--bg);
     padding: 8px 8px 6px; border-bottom: 1px solid var(--line); }
-  #matrix th.drag, #matrix td.drag { width: 28px; padding-left: 0; padding-right: 0; text-align: center; }
+  #matrix > thead > tr > th.drag, #matrix > tbody > tr > td.drag { width: 28px; padding-left: 0; padding-right: 0; text-align: center; }
   .handle { display: inline-block; padding: 6px 4px; color: var(--muted); cursor: grab; touch-action: none; user-select: none; font-size: 16px; line-height: 1; }
   .handle:hover { color: var(--text); }
   tr.dragging td { background: var(--chip); opacity: .85; }
   tr.dragging .handle { cursor: grabbing; }
   /* Phones: handle to the left of the product name, stop-tracking icon to its right. */
   @media (max-width: 700px) {
-    #matrix tr.row { position: relative; }
-    #matrix td.drag { position: absolute; left: 0; top: 10px; width: auto; padding: 0; }
-    #matrix td.drag + td { padding-left: 30px; padding-right: 40px; }
+    #matrix > tbody > tr.row { position: relative; }
+    #matrix > tbody > tr > td.drag { position: absolute; left: 0; top: 10px; width: auto; padding: 0; }
+    #matrix > tbody > tr > td.drag + td { padding-left: 30px; padding-right: 40px; }
   }
-  #matrix th.act { width: 40px; }
-  #matrix td.act { text-align: right; }
+  #matrix > thead > tr > th.act { width: 40px; }
+  #matrix > tbody > tr > td.act { text-align: right; }
   button.untrack { display: inline-flex; padding: 6px; background: transparent; color: var(--muted); border-color: transparent; }
   button.untrack:hover { color: var(--up); border-color: var(--up); }
-  @media (max-width: 700px) { #matrix td.act { position: absolute; right: 0; top: 8px; width: auto; padding: 0; } }
+  @media (max-width: 700px) { #matrix > tbody > tr > td.act { position: absolute; right: 0; top: 8px; width: auto; padding: 0; } }
+  .unv { color: #b7791f; font-weight: 700; margin-left: 1px; cursor: help; }
+  .old { display: inline-block; margin-left: 4px; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 3px; }
+  .unv-tag { font-size: 11px; color: #b7791f; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; white-space: nowrap; }
+  table.items .checked { white-space: nowrap; }
+  .legend { font-size: 12px; margin: 10px 2px 0; }
   .looking { color: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .45; } }
   button:disabled { opacity: .5; cursor: default; }
@@ -127,6 +136,8 @@
 
   <div class="card" id="matrix-card">
     <table id="matrix"></table>
+    <p class="legend muted"><sup class="unv">?</sup> price from the store's own search results, not confirmed on the product page ·
+      <span class="old">10/29</span> date the price was last checked, shown when it wasn't updated in the latest check</p>
     <div id="empty" class="empty" style="display:none">No products yet.</div>
   </div>
 
@@ -215,10 +226,11 @@ function itemsTable(p) {
         <td>${itemLabel(l)}</td>
         <td class="num unit"><span class="u">${unitMoney(l.unit_price)}</span>${perUnit(p)}${i === 0 ? ' <span class="tag">Cheapest</span>' : ""}
           <span class="pack-sm muted">${money(l.price)}${qtyText(l.qty)}</span></td>
-        <td class="num pack muted">${money(l.price)}${qtyText(l.qty)}</td></tr>`).join("")
+        <td class="num pack muted">${money(l.price)}${qtyText(l.qty)}</td>
+        <td class="num checked muted">${l.recorded_at ? monthDay(l.recorded_at) : "–"}${l.verified === false ? ` <span class="unv-tag" title="${UNV_TITLE}">search result</span>` : ""}</td></tr>`).join("")
     : `<tr><td colspan="6" class="muted">No prices logged yet</td></tr>`;
   return `<table class="items"><thead><tr><th class="rank">#</th><th class="store">Store</th><th>Item</th>
-    <th class="num unit">Unit price</th><th class="num pack">Pack</th></tr></thead>
+    <th class="num unit">Unit price</th><th class="num pack">Pack</th><th class="num checked">Checked</th></tr></thead>
     <tbody>${rows}</tbody></table>`;
 }
 
@@ -226,6 +238,7 @@ function itemsTable(p) {
 function renderMatrix(ps) {
   $("#empty").style.display = ps.length ? "none" : "block";
   if (!ps.length) { $("#matrix").innerHTML = ""; return; }
+  const latest = latestCheckDay();
   const used = Object.keys(state.stores).filter((k) => ps.some((p) => p.listings.some((l) => l.store === k && l.unit_price != null)));
   const head = `<tr><th class="drag"></th><th class="prod">Product</th>${used.map((k) =>
     `<th class="num">${storeBadge(k)}${esc(state.stores[k])}</th>`).join("")}<th class="act"></th></tr>`;
@@ -251,19 +264,34 @@ function renderMatrix(ps) {
       if (l.previous_unit_price != null && Math.abs(l.unit_price - l.previous_unit_price) > 1e-9)
         trend = l.unit_price < l.previous_unit_price ? ' <span class="down" title="Lower than last time">▼</span>' : ' <span class="up" title="Higher than last time">▲</span>';
       const isBest = k === p.best_store;
-      return `<td class="cell ${isBest ? "best" : ""}" data-store="${esc(state.stores[k])}" title="${esc(l.variant || l.note || "")}"><span class="u">${unitMoney(l.unit_price)}</span>${trend}
+      return `<td class="cell ${isBest ? "best" : ""}" data-store="${esc(state.stores[k])}" title="${esc(l.variant || l.note || "")}"><span class="u">${unitMoney(l.unit_price)}</span>${unvMark(l)}${trend}
         ${isBest && save ? `<span class="save">Cheapest · ${save}</span>` : isBest ? '<span class="save">Cheapest</span>' : ""}
-        <span class="p">${money(l.price)}${qtyText(l.qty)}</span></td>`;
+        <span class="p">${money(l.price)}${qtyText(l.qty)}${oldDate(l, latest)}</span></td>`;
     }).join("");
     return `${heading}<tr class="row ${state.selected === p.id ? "sel" : ""}" data-id="${p.id}" data-cat="${cat}">
       <td class="drag"><span class="handle" title="Drag to reorder" aria-label="Drag to reorder">⠿</span></td>
       <td>${nameHtml(p)}${hit}<span class="per">${[perUnit(p) && "per " + esc(p.unit), lookupNote(p) || (best ? "" : "no prices yet")].filter(Boolean).join(" · ")}</span></td>${cells}
       <td class="act"><button type="button" class="untrack" data-id="${p.id}" title="Stop tracking ${esc(p.name)}" aria-label="Stop tracking ${esc(p.name)}">${EYE_OFF}</button></td></tr>`;
   }).join("");
+  $("main").appendChild($("#detail")); // keep the details panel (and its chart) alive while the table is rebuilt
   $("#matrix").innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
   $("#matrix").querySelectorAll("tr.row").forEach((r) => r.onclick = () => toggleDetail(Number(r.dataset.id)));
   $("#matrix").querySelectorAll("button.untrack").forEach((b) => b.onclick = (e) => { e.stopPropagation(); untrack(Number(b.dataset.id)); });
   enableRowDrag();
+  placeDetail();
+}
+
+// The open product's details sit in a full-width row directly under that product.
+function placeDetail() {
+  const row = state.selected && $(`#matrix tr.row[data-id="${state.selected}"]`);
+  if (!row) return;
+  const tr = document.createElement("tr");
+  tr.className = "detail-row";
+  const td = document.createElement("td");
+  td.colSpan = row.children.length;
+  td.appendChild($("#detail"));
+  tr.appendChild(td);
+  row.after(tr);
 }
 
 function toggleDetail(id) {
@@ -359,6 +387,15 @@ $("#lookup-btn").onclick = async () => {
   catch (err) { toast(err.message); }
 };
 
+// Price marks: "?" = read from the store's search results, not confirmed on the product page;
+// a date = this price wasn't updated in the most recent price check.
+const UNV_TITLE = "From the store's own search results; not confirmed on the product page";
+const monthDay = (iso) => `${+iso.slice(5, 7)}/${+iso.slice(8, 10)}`;
+const latestCheckDay = () => state.products.flatMap((p) => p.listings).map((l) => l.recorded_at || "").sort().pop()?.slice(0, 10);
+const unvMark = (l) => l.verified === false ? `<sup class="unv" title="${UNV_TITLE}">?</sup>` : "";
+const oldDate = (l, latest) => l.recorded_at && latest && l.recorded_at.slice(0, 10) < latest
+  ? `<span class="old" title="Not updated in the latest price check">${monthDay(l.recorded_at)}</span>` : "";
+
 const CATEGORY_LABELS = { meat: "Meat", vegetable: "Vegetables", other: "Other" };
 
 // "Stop watching" icon for the per-row Stop tracking button (hides the product; nothing is deleted).
@@ -398,6 +435,7 @@ function enableRowDrag() {
         const ids = [...tbody.querySelectorAll("tr.row")].map((r) => Number(r.dataset.id));
         if (ids.join() === before.join()) return;
         state.products.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+        if (state.selected) render();
         try { await api("/api/order", { ids }); } catch (err) { toast(err.message); load(); }
       };
       window.addEventListener("pointermove", moveTo);

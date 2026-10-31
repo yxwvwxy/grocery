@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS prices (
     price       REAL NOT NULL,          -- pack price
     qty         REAL NOT NULL DEFAULT 1,
     source      TEXT NOT NULL,          -- 'auto' (fetched) or 'manual'
+    verified    INTEGER NOT NULL DEFAULT 1, -- 0 = read from the store's search results, not its product page
     note        TEXT,
     recorded_at TEXT NOT NULL
 );
@@ -69,6 +70,9 @@ def connect(path=DB_PATH):
         conn.execute("ALTER TABLE products ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
         ids = [r["id"] for r in conn.execute("SELECT id FROM products ORDER BY name COLLATE NOCASE")]
         conn.executemany("UPDATE products SET sort_order = ? WHERE id = ?", list(enumerate(ids)))
+        conn.commit()
+    if "verified" not in {r["name"] for r in conn.execute("PRAGMA table_info(prices)")}:
+        conn.execute("ALTER TABLE prices ADD COLUMN verified INTEGER NOT NULL DEFAULT 1")
         conn.commit()
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(listings)")}
     if "image_url" not in cols:
@@ -186,10 +190,10 @@ def get_or_create_listing(conn, product_id, store, variant="", url=None, qty=Non
     ).fetchone()["id"]
 
 
-def record_price(conn, listing_id, price, qty=1, source="manual", note=None):
+def record_price(conn, listing_id, price, qty=1, source="manual", note=None, verified=True):
     conn.execute(
-        "INSERT INTO prices (listing_id, price, qty, source, note, recorded_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (listing_id, price, qty, source, note, now()),
+        "INSERT INTO prices (listing_id, price, qty, source, note, verified, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (listing_id, price, qty, source, note, 1 if verified else 0, now()),
     )
     conn.commit()
 
@@ -230,6 +234,7 @@ def overview(conn):
             "lowest_unit_price": min(units) if units else None,
             "recorded_at": hist[-1]["recorded_at"] if hist else None,
             "note": hist[-1]["note"] if hist else None,
+            "verified": bool(hist[-1]["verified"]) if hist else None,
         })
     for p in products:
         ls = listings_by_product[p["id"]]

@@ -60,16 +60,31 @@ def _finish(product_id, state, message):
 
 
 def _run(product_id):
+    _finish(product_id, *lookup_once(product_id))
+
+
+def lookup_once(product_id):
+    """Look up one product's prices now and wait for it; returns (state, message).
+
+    Used by the dashboard (in a background thread) and by `pricewatch refresh`, which
+    runs the weekly refresh one product at a time. Tools are allowed up front, so a
+    lookup never stops to ask for permission.
+    """
     claude = find_claude()
     if not claude:
-        return _finish(product_id, "failed", "Claude Code is not installed on this Mac.")
+        return "failed", "Claude Code is not installed on this Mac."
     conn = db.connect()
     product = db.get_product(conn, product_id)
+    has_prices = conn.execute(
+        "SELECT 1 FROM prices pr JOIN listings l ON l.id = pr.listing_id WHERE l.product_id = ? LIMIT 1",
+        (product_id,),
+    ).fetchone()
     conn.close()
-    prompt = (
-        "Read pricewatch/LOOKUP.md and follow it for product #{id} ({name}) only. "
-        "It was just added to the tracking list, so it has no prices yet."
-    ).format(id=product_id, name=product["name"] + (" " + product["name_zh"] if product["name_zh"] else ""))
+    name = product["name"] + (" " + product["name_zh"] if product["name_zh"] else "")
+    prompt = "Read pricewatch/LOOKUP.md and follow it for product #{} ({}) only. ".format(product_id, name) + (
+        "It already has prices: re-price every existing item with its exact --variant text so its history "
+        "continues, and add the items and stores the rules call for that are still missing."
+        if has_prices else "It was just added to the tracking list, so it has no prices yet.")
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, PRICEWATCH_QUIET="1")
     try:
@@ -79,7 +94,7 @@ def _run(product_id):
             cwd=ROOT, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30 * 60,
         )
     except subprocess.TimeoutExpired:
-        return _finish(product_id, "failed", "The price lookup took more than 30 minutes and was stopped.")
+        return "failed", "The price lookup took more than 30 minutes and was stopped."
     (LOG_DIR / "{}.log".format(product_id)).write_text(proc.stdout + proc.stderr)
     try:
         result = json.loads(proc.stdout)
@@ -87,7 +102,7 @@ def _run(product_id):
         result = {"is_error": True, "result": (proc.stderr or proc.stdout).strip()[-300:]}
     text = (result.get("result") or "").strip()
     if "Not logged in" in text:
-        return _finish(product_id, "failed", "Claude Code isn't signed in on this Mac yet.")
+        return "failed", "Claude Code isn't signed in on this Mac yet."
     if proc.returncode or result.get("is_error"):
-        return _finish(product_id, "failed", "The price lookup failed: " + (text[:200] or "no details"))
-    _finish(product_id, "done", "Prices looked up.")
+        return "failed", "The price lookup failed: " + (text[:200] or "no details")
+    return "done", "Prices looked up."

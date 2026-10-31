@@ -18,8 +18,15 @@ run from the repository root; never edit `data/prices.db` directly.
 
 Use only each store's own official site, for prices and anything else. Never use Instacart,
 DoorDash, Uber Eats, Postmates, warehouserunner.com or any other third-party aggregator or
-price tracker. Restrict WebSearch to the store's own domains (`allowed_domains`). If a price
-cannot be found on the official site, skip that store rather than using another source.
+price tracker. Restrict WebSearch to the store's own domains (`allowed_domains`).
+
+Prefer the price on the item's own product page. Several stores often block automated visits
+(Walmart's bot check, ShopRite's 403, Costco's sign-in, 99 Ranch errors). When the product page
+can't be read, you may use the price the store's own site shows for that exact item in its
+search results or category listings (a WebSearch result on the store's domain counts), and
+record it with `--unverified` so the dashboard marks it. If several such results disagree, use
+the regular (non-sale) price that matches the item's size; if you still can't tell which price
+is right, skip the item. If nothing on the official site shows a price, skip that store.
 
 ## 1. Make the product's names and compare unit complete
 
@@ -29,7 +36,7 @@ Run `python3 -m pricewatch compare <product_id>` to see the product. Then make s
   if it was added under a Chinese name only, give it the common English name
 - a Chinese name, the one used in Chinese grocery stores in the US (`Bacon` → `培根`)
 - a compare unit that makes different pack sizes comparable: `lb` for produce, meat and most
-  things sold by weight, `fl oz` for milk, cream and other liquids, `egg` for eggs, `ct` or
+  things sold by weight, `fl oz` for milk, cream and other liquids, `dozen` for eggs, `ct` or
   `each` for things sold by count
 - a category for the dashboard: `meat` (meat, poultry and seafood, including bacon, sausage,
   fish and shrimp), `vegetable` (vegetables, including tomatoes), or `other` (everything else:
@@ -52,8 +59,11 @@ python3 -m pricewatch record <product_id> <store_code> <pack_price> --qty <units
   --variant "<brand and size, e.g. Eggland's Best Large White 12ct>" --note "<site>官网, <M/D>查价"
 ```
 
+Add `--unverified` when the price came from search results instead of the product page.
+
 - `--qty` is the number of compare units in the pack, so unit prices are comparable:
-  a 12 oz pack of bacon compared per `lb` is `--qty 0.75`; a dozen eggs per `egg` is `--qty 12`;
+  a 12 oz pack of bacon compared per `lb` is `--qty 0.75`; eggs are compared per `dozen`, so a
+  12ct carton is `--qty 1`, an 18ct is `--qty 1.5` and a 24ct is `--qty 2`;
   a 32 fl oz carton per `fl oz` is `--qty 32`; a product sold per lb is `--qty 1`.
 - `--note` uses today's date as month/day, e.g. `target.com官网, 11/6查价`.
 - Match how broad the product name is, and never narrow it or rename the product to one type.
@@ -66,6 +76,9 @@ python3 -m pricewatch record <product_id> <store_code> <pack_price> --qty <units
     spaghetti, penne, rigatoni, fusilli; for pasta sauce, marinara, tomato basil, alfredo, vodka,
     pesto; for chicken legs, drumsticks, leg quarters and thighs, both bone-in and boneless,
     skin-on and skinless where sold.
+  - A name is general in every detail it leaves out. `Chicken Thigh` fixes the cut but not the
+    rest, so record bone-in and boneless, skin-on and skinless thighs; only
+    `Boneless Skinless Chicken Thighs` limits it to that one form.
 - `--variant` must say exactly what the item is, with every detail that tells it apart from the
   other items of the product: brand, type, size, and for meat the cut and whether it is bone-in
   or boneless and skin-on or skinless, e.g. `Perdue Bone-In Skin-On Chicken Drumsticks 3lb`,

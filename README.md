@@ -1,6 +1,6 @@
 # Grocery Price Compare
 
-Compare the price of the same product across ShopRite, H Mart, Costco, 99 Ranch, Target and Walmart. Prices are compared by **unit price** (per lb, per egg, per fl oz…), so different pack sizes compare directly. Prices are looked up by Claude on each store's official website.
+Compare the price of the same product across ShopRite, H Mart, Costco, 99 Ranch, Target and Walmart. Prices are compared by **unit price** (per lb, per dozen eggs, per fl oz…), so different pack sizes compare directly. Prices are looked up by Claude on each store's official website.
 
 Uses only the Python standard library, so there is nothing to install. Data is stored in `data/prices.db` (SQLite), which is tracked in git.
 
@@ -38,9 +38,9 @@ The dashboard's lookup runs Claude Code on this Mac, which must be signed in onc
 ## Command line
 
 ```bash
-python3 -m pricewatch add Eggs --zh "<Chinese name>" --unit egg --target 0.25   # new product, compared per egg
+python3 -m pricewatch add Eggs --zh "<Chinese name>" --unit dozen --target 3   # new product, compared per dozen
 python3 -m pricewatch set 9 --name Bacon --zh "<Chinese name>" --unit lb        # change names or compare unit
-python3 -m pricewatch record 1 costco 7.49 --qty 24 --variant "Kirkland Large 24ct"   # $7.49 for 24 at Costco
+python3 -m pricewatch record 1 costco 7.49 --qty 2 --variant "Kirkland Large 24ct"    # $7.49 for 2 dozen at Costco
 python3 -m pricewatch compare                                                   # unit prices across stores
 python3 -m pricewatch remove 1                                                  # delete a product and its history
 ```

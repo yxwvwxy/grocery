@@ -34,7 +34,8 @@ def unit_money(v):
     return "${:.3f}".format(v) if v < 1 else "${:.2f}".format(v)
 
 
-def record_and_alert(conn, product_id, store, price, qty=1, source="manual", note=None, url=None, variant=""):
+def record_and_alert(conn, product_id, store, price, qty=1, source="manual", note=None, url=None, variant="",
+                     verified=True):
     """Record a pack price for one variant at a store; return alerts for drops, targets and a new cheapest store.
 
     A store can carry several variants (brands/sizes) of the same product, each tracked separately.
@@ -44,7 +45,7 @@ def record_and_alert(conn, product_id, store, price, qty=1, source="manual", not
     old = next((l for l in before["listings"] if l["store"] == store and l["variant"] == variant), None)
 
     listing_id = db.get_or_create_listing(conn, product_id, store, variant=variant, url=url, qty=qty if url else None)
-    db.record_price(conn, listing_id, price, qty=qty, source=source, note=note)
+    db.record_price(conn, listing_id, price, qty=qty, source=source, note=note, verified=verified)
 
     unit = price / qty
     name = display_name(product)
@@ -90,7 +91,8 @@ def cmd_add(conn, args):
 def cmd_record(conn, args):
     _product(conn, args.product_id)
     variant = args.variant or ""
-    record_and_alert(conn, args.product_id, _store(args.store), args.price, args.qty, note=args.note, variant=variant)
+    record_and_alert(conn, args.product_id, _store(args.store), args.price, args.qty, note=args.note, variant=variant,
+                     verified=not args.unverified)
     label = STORES[args.store] + (" ({})".format(variant) if variant else "")
     print("已记录 #{} @ {}: ${:.2f} / {:g}".format(args.product_id, label, args.price, args.qty))
 
@@ -162,6 +164,19 @@ def cmd_check(conn, args):
         print("\n{} 个没抓到价格，可以用 `record` 手动记录。".format(failed))
 
 
+def cmd_refresh(conn, args):
+    """Look up every tracked product again with Claude, one at a time (the weekly refresh)."""
+    from . import lookup
+    products = db.overview(conn)
+    if args.product_id:
+        products = [p for p in products if p["id"] == args.product_id]
+    print("{}  开始查价：{} 个商品".format(db.now(), len(products)), flush=True)
+    for p in products:
+        state, message = lookup.lookup_once(p["id"])
+        print("{}  #{} {}: {} — {}".format(db.now(), p["id"], display_name(p), state, message), flush=True)
+    print("{}  查价结束".format(db.now()), flush=True)
+
+
 def cmd_serve(conn, args):
     from .server import serve
     serve(args.port)
@@ -185,6 +200,7 @@ def main(argv=None):
     r.add_argument("--qty", type=float, default=1, help="一包有几个单位（默认 1）")
     r.add_argument("--note", help="备注，如 '打折'、'会员价'")
     r.add_argument("--variant", help="这家店卖的具体品牌/规格，如 \"Eggland's Best 12ct\"（同一家店可以有多个variant）")
+    r.add_argument("--unverified", action="store_true", help="价格来自超市官网的搜索结果，没能在商品页上确认")
     r.set_defaults(func=cmd_record)
 
     k = sub.add_parser("link", help="给某超市的商品关联页面链接，用于自动抓价")
@@ -214,6 +230,10 @@ def main(argv=None):
     ch = sub.add_parser("check", help="自动抓取所有带链接的价格")
     ch.add_argument("--store", help="只抓这家超市")
     ch.set_defaults(func=cmd_check)
+
+    rf = sub.add_parser("refresh", help="用 Claude 重新查所有追踪中的商品价格（每周查价）")
+    rf.add_argument("product_id", type=int, nargs="?", help="只查这一个商品")
+    rf.set_defaults(func=cmd_refresh)
 
     s = sub.add_parser("serve", help="打开本地网页看板")
     s.add_argument("--port", type=int, default=8765)
