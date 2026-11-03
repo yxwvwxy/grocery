@@ -2,6 +2,7 @@ import argparse
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 from . import STORES, db
 from .extract import FetchError, fetch_price
@@ -177,6 +178,13 @@ def cmd_refresh(conn, args):
     print("{}  查价结束".format(db.now()), flush=True)
 
 
+def cmd_export(conn, args):
+    from .export import build
+    out = Path(args.out)
+    out.write_text(build(conn), encoding="utf-8")
+    print("已导出只读版网页：{}".format(out))
+
+
 def cmd_serve(conn, args):
     from .server import serve
     serve(args.port)
@@ -235,6 +243,10 @@ def main(argv=None):
     rf = sub.add_parser("refresh", help="用 Claude 重新查所有追踪中的商品价格（每周查价）")
     rf.add_argument("product_id", type=int, nargs="?", help="只查这一个商品")
     rf.set_defaults(func=cmd_refresh)
+
+    ex = sub.add_parser("export", help="导出只读版网页（数据打包在网页里，用来分享）")
+    ex.add_argument("out", nargs="?", default="data/share.html", help="输出文件（默认 data/share.html）")
+    ex.set_defaults(func=cmd_export)
 
     s = sub.add_parser("serve", help="打开本地网页看板")
     s.add_argument("--port", type=int, default=8765)

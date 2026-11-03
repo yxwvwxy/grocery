@@ -4,6 +4,8 @@ Compare the price of the same product across ShopRite, H Mart, Costco, 99 Ranch,
 
 Uses only the Python standard library, so there is nothing to install. Data is stored in `data/prices.db` (SQLite), which is tracked in git.
 
+**Read-only copy:** https://claude.ai/artifact/HwPtu6CjfP1PjPv2wsx3Vz — the same comparison table, item lists and price history, viewable without running anything (no tracking or lookups). It is a snapshot: it is republished after each price check with `python3 -m pricewatch export`. Only people it has been shared with can open it.
+
 ## Web dashboard
 
 ```bash
@@ -43,6 +45,8 @@ python3 -m pricewatch set 9 --name Bacon --zh "<Chinese name>" --unit lb        
 python3 -m pricewatch record 1 costco 7.49 --qty 2 --variant "Kirkland Large 24ct"    # $7.49 for 2 dozen at Costco
 python3 -m pricewatch compare                                                   # unit prices across stores
 python3 -m pricewatch remove 1                                                  # delete a product and its history
+python3 -m pricewatch refresh                                                   # look up every tracked product again with Claude
+python3 -m pricewatch export                                                    # write the read-only copy to data/share.html
 ```
 
 Store codes: `shoprite` `hmart` `costco` `ranch99` `target` `walmart`

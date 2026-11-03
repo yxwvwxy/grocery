@@ -22,6 +22,11 @@
       --line: #2e3230; --accent: #5cbf85; --down: #5cbf85; --up: #ef7a62; --chip: #252b27; --best: #1f3327;
     }
   }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #141614; --card: #1a1a19; --text: #f0efec; --muted: #a8aba6;
+    --line: #2e3230; --accent: #5cbf85; --down: #5cbf85; --up: #ef7a62; --chip: #252b27; --best: #1f3327;
+  }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.5 -apple-system, "Helvetica Neue", "PingFang SC", sans-serif; }
@@ -115,6 +120,9 @@
   details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 12px; }
   details.history { margin-top: 16px; border-top: 1px solid var(--line); }
   details.history summary { font-size: 14px; color: var(--text); padding: 12px 0 4px; }
+  /* Read-only copy (see export.py): no tracking, reordering or lookups. */
+  .readonly .edit-only, .readonly #matrix .drag, .readonly #matrix .act { display: none !important; }
+  @media (max-width: 700px) { .readonly #matrix > tbody > tr > td.drag + td { padding-left: 8px; padding-right: 8px; } }
   #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg);
     padding: 10px 16px; border-radius: 10px; display: none; max-width: calc(100% - 32px); }
 </style>
@@ -123,10 +131,12 @@
 <main>
   <h1>Grocery Price Compare</h1>
   <p class="sub">Unit prices of the same product across your stores. The cheapest store is highlighted; click a product to see its price history.</p>
-  <p style="background:#ffe08a;color:#1f2421;padding:6px 10px;border-radius:6px;font-weight:600;display:inline-block;margin:0 0 16px">
+  <p class="edit-only" style="background:#ffe08a;color:#1f2421;padding:6px 10px;border-radius:6px;font-weight:600;display:inline-block;margin:0 0 16px">
     页面版本 / Build: {{BUILD}}</p>
 
-  <div class="card">
+  <p class="sub" id="snapshot-note" hidden></p>
+
+  <div class="card edit-only">
     <h2 style="margin-bottom:10px">Track a new product</h2>
     <form id="add-form" class="add-form">
       <input name="name" placeholder="Product name in English or Chinese, e.g. Milk / 牛奶" required>
@@ -150,7 +160,7 @@
       <summary>Price history <span class="muted">— average unit price per store, at each price check</span></summary>
       <div class="chartbox"><canvas id="chart" aria-label="Unit price history by store"></canvas></div>
     </details>
-    <p style="margin:12px 0 0"><button type="button" class="ghost" id="lookup-btn">Look up prices now</button>
+    <p class="edit-only" style="margin:12px 0 0"><button type="button" class="ghost" id="lookup-btn">Look up prices now</button>
       <button type="button" class="ghost" id="untrack-btn">Stop tracking</button>
       <span class="muted" style="font-size:13px;margin-left:8px">Price history is kept. Track the same name again to bring it back.</span></p>
   </div>
@@ -159,11 +169,18 @@
 
 <script>
 let state = { stores: {}, products: [], selected: null };
-let chart;
 const $ = (s) => document.querySelector(s);
+// Set in the read-only copy made by `pricewatch export`: all data is embedded in the page.
+const SNAPSHOT = window.PRICEWATCH_SNAPSHOT;
+if (SNAPSHOT) {
+  document.documentElement.classList.add("readonly");
+  $("#snapshot-note").hidden = false;
+  $("#snapshot-note").textContent = `Read-only copy · prices as of ${SNAPSHOT.as_of}`;
+}
+let chart;
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const storeColor = (k) => css("--s-" + k) || css("--muted"); // chart line color only — see note above
-const storeBadge = (k) => `<img class="store-icon" src="icons/${k}.png" alt="${esc(state.stores[k] || k)}">`;
+const storeBadge = (k) => `<img class="store-icon" src="${SNAPSHOT ? SNAPSHOT.icons[k] : `icons/${k}.png`}" alt="${esc(state.stores[k] || k)}">`;
 const money = (v) => v == null ? "–" : "$" + Number(v).toFixed(2);
 const unitMoney = (v) => v == null ? "–" : "$" + Number(v).toFixed(2);
 const qtyText = (q) => q === 1 ? "" : ` / ${+q.toFixed(3)}`;
@@ -177,6 +194,11 @@ function toast(msg) {
 }
 
 async function api(path, body) {
+  if (SNAPSHOT) {
+    if (path === "/api/products") return { stores: SNAPSHOT.stores, products: SNAPSHOT.products };
+    if (path.startsWith("/api/history/")) return SNAPSHOT.history[path.split("/").pop()] || [];
+    throw new Error("This is a read-only copy");
+  }
   const res = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Request failed");
@@ -277,7 +299,7 @@ function renderMatrix(ps) {
   $("#matrix").innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
   $("#matrix").querySelectorAll("tr.row").forEach((r) => r.onclick = () => toggleDetail(Number(r.dataset.id)));
   $("#matrix").querySelectorAll("button.untrack").forEach((b) => b.onclick = (e) => { e.stopPropagation(); untrack(Number(b.dataset.id)); });
-  enableRowDrag();
+  if (!SNAPSHOT) enableRowDrag();
   placeDetail();
 }
 
