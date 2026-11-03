@@ -31,7 +31,7 @@ What the dashboard does:
 ## How prices get updated
 
 - **When you track a product**: a lookup for that one product, started from the dashboard.
-- **Every Friday at 8:00 AM (Eastern)**: a scheduled task in the Claude desktop app refreshes every tracked product. It runs while the app is open; if the app is closed at that time, it runs the next time the app opens. Manage it under "Scheduled" in the app's sidebar.
+- **Every Friday at 8:00 AM (Eastern)**: a macOS launchd job (`~/Library/LaunchAgents/com.yxwvwxy.grocery-weekly.plist`) runs `python3 -m pricewatch refresh --publish`. It looks up every tracked product again, then updates the read-only copy and pushes it to GitHub. The Claude app doesn't need to be open. If the Mac is asleep at 8:00, the job runs when it wakes; if it is shut down, that week is skipped. The log is in `data/lookups/weekly.log`.
 
 Both follow the rules in [pricewatch/LOOKUP.md](pricewatch/LOOKUP.md): official store sites only, no frozen meat, no organic unless it is the only option, and so on.
 

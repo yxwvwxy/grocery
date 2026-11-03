@@ -176,6 +176,26 @@ def cmd_refresh(conn, args):
         state, message = lookup.lookup_once(p["id"])
         print("{}  #{} {}: {} — {}".format(db.now(), p["id"], display_name(p), state, message), flush=True)
     print("{}  查价结束".format(db.now()), flush=True)
+    if args.publish:
+        publish(conn)
+
+
+def publish(conn):
+    """Update the public read-only copy: export docs/index.html, then commit it with the
+    price database and push, so GitHub Pages serves the new prices."""
+    from .export import build
+    root = Path(__file__).resolve().parent.parent
+    (root / "docs" / "index.html").write_text(build(conn), encoding="utf-8")
+    git = lambda *a: subprocess.run(["git", *a], cwd=root, capture_output=True, text=True)
+    files = ["docs/index.html", "data/prices.db"]
+    if not git("status", "--porcelain", "--", *files).stdout.strip():
+        print("{}  只读版没有变化，不用推送".format(db.now()), flush=True)
+        return
+    git("add", "--", *files)
+    git("commit", "-m", "Weekly price update " + db.now()[:10], "--", *files)
+    pushed = git("pull", "--rebase", "--autostash")
+    pushed = pushed if pushed.returncode else git("push")
+    print("{}  {}".format(db.now(), "已推送只读版" if not pushed.returncode else "推送失败：" + pushed.stderr.strip()), flush=True)
 
 
 def cmd_export(conn, args):
@@ -243,6 +263,7 @@ def main(argv=None):
 
     rf = sub.add_parser("refresh", help="用 Claude 重新查所有追踪中的商品价格（每周查价）")
     rf.add_argument("product_id", type=int, nargs="?", help="只查这一个商品")
+    rf.add_argument("--publish", action="store_true", help="查完后更新只读版网页并推送到 GitHub")
     rf.set_defaults(func=cmd_refresh)
 
     ex = sub.add_parser("export", help="导出只读版网页（数据打包在网页里，用来分享）")
