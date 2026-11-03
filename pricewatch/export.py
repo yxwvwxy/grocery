@@ -1,11 +1,11 @@
 """Build the read-only copy of the dashboard: one HTML file with today's data embedded.
 
-The copy is published as a claude.ai artifact so others can open it. It is the same
+The copy is written to docs/index.html, which GitHub Pages serves at
+https://yxwvwxy.github.io/grocery/ so anyone with the link can open it. It is the same
 page as the local dashboard, in read-only mode (see SNAPSHOT in static/index.html).
 """
 import base64
 import json
-import re
 from datetime import datetime
 
 from . import STORES, db
@@ -27,8 +27,5 @@ def build(conn):
     data = json.dumps(snapshot, ensure_ascii=False).replace("</", "<\\/")
 
     page = (STATIC / "index.html").read_text("utf-8")
-    head = re.search(r"<head>(.*?)</head>", page, re.S).group(1)
-    body = re.search(r"<body>(.*?)</body>", page, re.S).group(1)
-    # The artifact viewer supplies the doctype, charset and viewport; keep the title, Chart.js and styles.
-    head = re.sub(r'<meta[^>]*>\s*', "", head)
-    return head.strip() + "\n<script>window.PRICEWATCH_SNAPSHOT = " + data + ";</script>\n" + body.strip() + "\n"
+    # The data goes in before the page's own script, which reads it on load.
+    return page.replace("</head>", "<script>window.PRICEWATCH_SNAPSHOT = " + data + ";</script>\n</head>", 1)

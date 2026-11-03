@@ -181,6 +181,7 @@ def cmd_refresh(conn, args):
 def cmd_export(conn, args):
     from .export import build
     out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(build(conn), encoding="utf-8")
     print("已导出只读版网页：{}".format(out))
 
@@ -245,7 +246,7 @@ def main(argv=None):
     rf.set_defaults(func=cmd_refresh)
 
     ex = sub.add_parser("export", help="导出只读版网页（数据打包在网页里，用来分享）")
-    ex.add_argument("out", nargs="?", default="data/share.html", help="输出文件（默认 data/share.html）")
+    ex.add_argument("out", nargs="?", default="docs/index.html", help="输出文件（默认 docs/index.html，GitHub Pages 发布的就是它）")
     ex.set_defaults(func=cmd_export)
 
     s = sub.add_parser("serve", help="打开本地网页看板")
