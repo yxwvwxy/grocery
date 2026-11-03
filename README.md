@@ -8,6 +8,10 @@ Read-only copy, open to anyone with the link:
 
 https://yxwvwxy.github.io/grocery/
 
+<img src="images/grocery-compare.png" alt="Comparison table: unit prices across six stores, cheapest highlighted" width="720">
+
+<img src="images/grocery-detail.png" alt="Bacon details: every item ranked by price per lb" width="720">
+
 It shows the same comparison table, item lists and price history, without tracking or lookups. It is a snapshot served by GitHub Pages from `docs/index.html`; after each price check, `python3 -m pricewatch export` rewrites that file, and pushing it updates the page.
 
 ## Web dashboard
