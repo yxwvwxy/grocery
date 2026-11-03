@@ -216,7 +216,8 @@ def main(argv=None):
     st.add_argument("--name", help="英文名")
     st.add_argument("--zh", help="中文名")
     st.add_argument("--unit", help="比价单位，如 lb、egg、fl oz")
-    st.add_argument("--category", choices=db.CATEGORIES, help="分类：meat 肉类和海鲜、vegetable 蔬菜、other 其他")
+    st.add_argument("--category", choices=db.CATEGORIES,
+                     help="分类：meat 肉类、seafood 海鲜、vegetable 蔬菜、fruit 水果、dairy 蛋奶、pantry 干货调料、other 其他")
     st.set_defaults(func=cmd_set)
 
     rm = sub.add_parser("remove", help="删除商品及其所有价格")

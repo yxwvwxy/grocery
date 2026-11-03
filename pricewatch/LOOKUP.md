@@ -38,9 +38,12 @@ Run `python3 -m pricewatch compare <product_id>` to see the product. Then make s
 - a compare unit that makes different pack sizes comparable: `lb` for produce, meat and most
   things sold by weight, `fl oz` for milk, cream and other liquids, `dozen` for eggs, `ct` or
   `each` for things sold by count
-- a category for the dashboard: `meat` (meat, poultry and seafood, including bacon, sausage,
-  fish and shrimp), `vegetable` (vegetables, including tomatoes), or `other` (everything else:
-  fruit, eggs, dairy, pantry items)
+- a category for the dashboard, in the order the dashboard groups them: `meat` (meat and poultry,
+  e.g. bacon, chicken, beef, pork), `seafood` (fish, shrimp, shellfish — including frozen ones),
+  `vegetable` (vegetables, including tomatoes and mushrooms), `fruit` (fruit, including bananas),
+  `dairy` (milk, cheese, eggs, cream, yogurt, butter), `pantry` (shelf-stable dry goods: rice,
+  pasta, sauces, oil, spices, canned goods), or `other` (anything that doesn't fit the above:
+  bakery, snacks, beverages, household)
 
 Fix whatever is missing or wrong in one command, e.g.
 

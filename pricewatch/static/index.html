@@ -396,7 +396,7 @@ const unvMark = (l) => l.verified === false ? `<sup class="unv" title="${UNV_TIT
 const oldDate = (l, latest) => l.recorded_at && latest && l.recorded_at.slice(0, 10) < latest
   ? `<span class="old" title="Not updated in the latest price check">${monthDay(l.recorded_at)}</span>` : "";
 
-const CATEGORY_LABELS = { meat: "Meat", vegetable: "Vegetables", other: "Other" };
+const CATEGORY_LABELS = { meat: "Meat", seafood: "Seafood", vegetable: "Vegetables", fruit: "Fruit", dairy: "Dairy", pantry: "Pantry", other: "Other" };
 
 // "Stop watching" icon for the per-row Stop tracking button (hides the product; nothing is deleted).
 const EYE_OFF = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"

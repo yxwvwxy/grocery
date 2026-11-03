@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS products (
     target_price REAL,                  -- alert when a store's unit price is at or below this
     tracked      INTEGER NOT NULL DEFAULT 1, -- 0 = hidden from the dashboard; its price history is kept
     sort_order   INTEGER NOT NULL DEFAULT 0, -- position in the dashboard list, set by dragging rows
-    category     TEXT NOT NULL DEFAULT 'other', -- 'meat', 'vegetable' or 'other'; groups the dashboard list
+    category     TEXT NOT NULL DEFAULT 'other', -- one of CATEGORIES below; groups the dashboard list
     created_at   TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS listings (
@@ -139,7 +139,7 @@ def find_product(conn, name):
     ).fetchone()
 
 
-CATEGORIES = ("meat", "vegetable", "other")  # dashboard group order
+CATEGORIES = ("meat", "seafood", "vegetable", "fruit", "dairy", "pantry", "other")  # dashboard group order
 
 
 def update_product(conn, product_id, name=None, name_zh=None, unit=None, category=None):
@@ -212,8 +212,11 @@ def overview(conn):
     A product's listings are sorted cheapest first by latest unit price;
     stores with no price yet go last.
     """
-    products = [dict(r) for r in conn.execute("""SELECT * FROM products WHERE tracked
-           ORDER BY CASE category WHEN 'meat' THEN 0 WHEN 'vegetable' THEN 1 ELSE 2 END, sort_order, id""")]
+    cat_order = " ".join('WHEN \'{}\' THEN {}'.format(c, i) for i, c in enumerate(CATEGORIES))
+    products = [dict(r) for r in conn.execute(
+        """SELECT * FROM products WHERE tracked
+           ORDER BY CASE category {} END, sort_order, id""".format(cat_order)
+    )]
     history_by_listing = defaultdict(list)
     for r in conn.execute("SELECT * FROM prices ORDER BY recorded_at, id"):
         history_by_listing[r["listing_id"]].append(r)
