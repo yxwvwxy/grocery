@@ -1,6 +1,6 @@
 # Grocery Price Compare
 
-Compare the price of the same product across ShopRite, H Mart, Costco, 99 Ranch, Target and Walmart. Prices are compared by **unit price** (per lb, per dozen eggs, per fl oz…), so different pack sizes compare directly. Prices are looked up by Claude on each store's official website.
+Compare the price of the same product across ShopRite, H Mart, Costco, 99 Ranch, Target and Walmart. Prices are compared by **unit price** (per lb, per dozen eggs, per fl oz…), so different pack sizes compare directly. Every week Claude Code checks prices on each store's own website for the chosen location; the tracker then shows where the product is cheapest.
 
 Uses only the Python standard library, so there is nothing to install. Data is stored in `data/prices.db` (SQLite), which is tracked in git.
 
