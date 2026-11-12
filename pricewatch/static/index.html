@@ -120,9 +120,12 @@
   details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 12px; }
   details.history { margin-top: 16px; border-top: 1px solid var(--line); }
   details.history summary { font-size: 14px; color: var(--text); padding: 12px 0 4px; }
-  /* Read-only copy (see export.py): no tracking, reordering or lookups. */
-  .readonly .edit-only, .readonly #matrix .drag, .readonly #matrix .act { display: none !important; }
-  @media (max-width: 700px) { .readonly #matrix > tbody > tr > td.drag + td { padding-left: 8px; padding-right: 8px; } }
+  /* Read-only copy (see export.py): the page looks the same, but tracking, reordering
+     and lookups are switched off. */
+  .readonly .edit-only { display: none !important; }
+  .readonly .handle, .readonly .handle:hover { cursor: default; color: var(--muted); }
+  .readonly button.untrack:hover { color: var(--muted); border-color: transparent; }
+  .readonly input:disabled { opacity: .6; }
   #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg);
     padding: 10px 16px; border-radius: 10px; display: none; max-width: calc(100% - 32px); }
 </style>
@@ -132,14 +135,14 @@
   <h1>Grocery Price Compare</h1>
   <p class="sub">Unit prices of the same product across your stores. The cheapest store is highlighted; click a product to see its price history.</p>
   <p class="edit-only" style="background:#ffe08a;color:#1f2421;padding:6px 10px;border-radius:6px;font-weight:600;display:inline-block;margin:0 0 16px">
-    页面版本 / Build: {{BUILD}}</p>
+    &#x9875;&#x9762;&#x7248;&#x672C; / Build: {{BUILD}}</p>
 
   <p class="sub" id="snapshot-note" hidden></p>
 
-  <div class="card edit-only">
+  <div class="card">
     <h2 style="margin-bottom:10px">Track a new product</h2>
     <form id="add-form" class="add-form">
-      <input name="name" placeholder="Product name in English or Chinese, e.g. Milk / 牛奶" required>
+      <input name="name" placeholder="Product name in English or Chinese, e.g. Milk / &#x725B;&#x5976;" required>
       <button type="submit">Track</button>
     </form>
   </div>
@@ -160,7 +163,7 @@
       <summary>Price history <span class="muted">— average unit price per store, at each price check</span></summary>
       <div class="chartbox"><canvas id="chart" aria-label="Unit price history by store"></canvas></div>
     </details>
-    <p class="edit-only" style="margin:12px 0 0"><button type="button" class="ghost" id="lookup-btn">Look up prices now</button>
+    <p style="margin:12px 0 0"><button type="button" class="ghost" id="lookup-btn">Look up prices now</button>
       <button type="button" class="ghost" id="untrack-btn">Stop tracking</button>
       <span class="muted" style="font-size:13px;margin-left:8px">Price history is kept. Track the same name again to bring it back.</span></p>
   </div>
@@ -176,6 +179,12 @@ if (SNAPSHOT) {
   document.documentElement.classList.add("readonly");
   $("#snapshot-note").hidden = false;
   $("#snapshot-note").textContent = `Read-only copy · prices as of ${SNAPSHOT.as_of}`;
+  // Same controls as the local dashboard, shown but switched off.
+  const name = $("#add-form input[name=name]");
+  name.placeholder = "Product name, e.g. Milk";
+  for (const el of [name, $("#add-form button"), $("#lookup-btn"), $("#untrack-btn")]) {
+    el.disabled = true; el.title = "Not available in the read-only copy";
+  }
 }
 let chart;
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -230,13 +239,13 @@ function render() {
   renderMatrix(state.products);
 }
 
-// Notes are recorded as "<brand/variant>, <date>查价" — show just the brand/variant part.
+// Notes are recorded as "<brand/variant>, <date> + price-check suffix" — show just the brand/variant part.
 // Prefer the listing's own variant (brand/size); fall back to parsing it out of the price note
 // for older listings recorded before per-variant tracking existed.
 const itemLabel = (l) => {
   if (l.variant) return esc(l.variant);
   const note = l.note;
-  return note ? esc(note.replace(/[,，]\s*\d{1,2}\/\d{1,2}查价\s*$/, "")) : '<span class="muted">—</span>';
+  return note ? esc(note.replace(/[,\uff0c]\s*\d{1,2}\/\d{1,2}\u67e5\u4ef7\s*$/, "")) : '<span class="muted">—</span>';
 };
 
 // Every item (store × brand/size) of one product, ranked cheapest-first by unit price.
@@ -293,13 +302,15 @@ function renderMatrix(ps) {
     return `${heading}<tr class="row ${state.selected === p.id ? "sel" : ""}" data-id="${p.id}" data-cat="${cat}">
       <td class="drag"><span class="handle" title="Drag to reorder" aria-label="Drag to reorder">⠿</span></td>
       <td>${nameHtml(p)}${hit}<span class="per">${[perUnit(p) && "per " + esc(p.unit), lookupNote(p) || (best ? "" : "no prices yet")].filter(Boolean).join(" · ")}</span></td>${cells}
-      <td class="act"><button type="button" class="untrack" data-id="${p.id}" title="Stop tracking ${esc(p.name)}" aria-label="Stop tracking ${esc(p.name)}">${EYE_OFF}</button></td></tr>`;
+      <td class="act"><button type="button" class="untrack" data-id="${p.id}" title="Stop tracking ${esc(p.name)}" aria-label="Stop tracking ${esc(p.name)}"${SNAPSHOT ? " disabled" : ""}>${EYE_OFF}</button></td></tr>`;
   }).join("");
   $("main").appendChild($("#detail")); // keep the details panel (and its chart) alive while the table is rebuilt
   $("#matrix").innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
   $("#matrix").querySelectorAll("tr.row").forEach((r) => r.onclick = () => toggleDetail(Number(r.dataset.id)));
   $("#matrix").querySelectorAll("button.untrack").forEach((b) => b.onclick = (e) => { e.stopPropagation(); untrack(Number(b.dataset.id)); });
   if (!SNAPSHOT) enableRowDrag();
+  // Read-only copy: the handle and eye icon do nothing, and clicking them doesn't open the row.
+  else $("#matrix").querySelectorAll("td.drag, td.act").forEach((td) => td.onclick = (e) => e.stopPropagation());
   placeDetail();
 }
 
@@ -329,7 +340,7 @@ async function showDetail(id) {
   $("#d-title").innerHTML = nameHtml(p);
   $("#d-meta").innerHTML = [perUnit(p) && `Compared per ${esc(p.unit)}`,
     p.target_price != null ? `Target ${unitMoney(p.target_price)}${perUnit(p)}` : "", lookupNote(p)].filter(Boolean).join(" · ");
-  $("#lookup-btn").disabled = p.lookup?.state === "running";
+  $("#lookup-btn").disabled = !!SNAPSHOT || p.lookup?.state === "running";
 
   $("#d-items").innerHTML = itemsTable(p);
 
